@@ -1,0 +1,22 @@
+# Dockerfile.dev
+FROM node:24-alpine
+
+# Tạo thư mục làm việc
+WORKDIR /app
+
+# Cài pnpm và copy file cấu hình
+RUN npm install -g pnpm
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install
+
+# Copy toàn bộ mã nguồn
+COPY . .
+
+# Cài ts-node-dev cho hot reload
+#RUN pnpm add -D ts-node-dev
+
+# Mở cổng
+EXPOSE 3000
+
+# Chạy ở chế độ dev
+CMD ["pnpm", "start:dev"]
