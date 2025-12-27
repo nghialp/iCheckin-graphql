@@ -73,11 +73,11 @@
 
 ```
 # Postgres (docker-compose.dev.yml uses these defaults)
-DB_HOST=postgres
-DB_PORT=5432
-DB_USERNAME=postgres
-DB_PASSWORD=q@7yF$rX3m!bH9w
-DB_DATABASE=icheckin
+DB_HOST=your_db_host_here
+DB_PORT=your_db_port_here
+DB_USERNAME=your_username_here
+DB_PASSWORD=your_password_here
+DB_DATABASE=your_database_name_here
 
 # JWT secret used to sign access/refresh tokens
 JWT_SECRET=your_jwt_secret_here

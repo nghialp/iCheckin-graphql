@@ -23,6 +23,8 @@ Add the following secrets to your repository (Settings → Secrets & variables �
 
 - `GHCR_USERNAME` — (optional) username to login to ghcr.io if the image is private
 - `GHCR_PASSWORD` — (optional) password/token to login to ghcr.io (use a fine-grained token or PAT)
+Additional secrets for clone-based deploy
+- `DEPLOY_TOKEN` — (optional) a GitHub token or PAT used by the server to clone the repo via HTTPS when the repository is private. If not provided and the repo is private, configure a deploy key on the server or make the repo accessible to the deploy user.
 
 Server prerequisites
 On the target server make sure to have:
