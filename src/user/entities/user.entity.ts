@@ -1,6 +1,6 @@
 import { Field, ID, ObjectType } from "@nestjs/graphql";
-import { Checkin } from "src/checkin/checin.entity";
-import { Friendship } from "src/friendships/friendship.entity";
+import { Checkin } from "../../checkin/checin.entity";
+import { Friendship } from "../../friendships/friendship.entity";
 import { Column, Entity, OneToMany, PrimaryGeneratedColumn } from "typeorm";
 
 @ObjectType()
