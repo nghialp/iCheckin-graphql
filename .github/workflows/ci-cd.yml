@@ -8,27 +8,20 @@ jobs:
   test-and-deploy:
     name: Test and deploy
     runs-on: ubuntu-latest
-    env:
-      NODE_OPTIONS: "--max_old_space_size=4096"
-      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-      DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
-      DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
     steps:
-      - name: Show Host, User, Port
+      - name: Debug secrets
         run: |
-          echo "DEPLOY_HOST = $DEPLOY_HOST"
-          echo "DEPLOY_USER = $DEPLOY_USER"
-          echo "DEPLOY_PORT = $DEPLOY_PORT"
-
-      - name: Check SSH Key presence
-        run: |
-          if [ -z "$DEPLOY_SSH_KEY" ]; then
+          echo "DEPLOY_HOST = ${{ secrets.DEPLOY_HOST }}"
+          echo "DEPLOY_USER = ${{ secrets.DEPLOY_USER }}"
+          echo "DEPLOY_PORT = ${{ secrets.DEPLOY_PORT }}"
+          echo "DEPLOY_PATH = ${{ secrets.DEPLOY_PATH }}"
+          if [ -z "${{ secrets.DEPLOY_SSH_KEY }}" ]; then
             echo "❌ DEPLOY_SSH_KEY is NOT set!"
             exit 1
           else
-            echo "✅ DEPLOY_SSH_KEY is set (value is masked)."
+            echo "✅ DEPLOY_SSH_KEY is set (masked)."
           fi
+
       - name: Checkout code
         uses: actions/checkout@v4
 
@@ -57,28 +50,30 @@ jobs:
 
       - name: Validate deploy credentials
         run: |
-          # Fail early with a clear message if neither SSH key nor clone token is provided
           if [ -z "${{ secrets.DEPLOY_SSH_KEY }}" ] && [ -z "${{ secrets.DEPLOY_TOKEN }}" ]; then
             echo "ERROR: Missing deploy credentials. Set either DEPLOY_SSH_KEY (private key) or DEPLOY_TOKEN (git clone token) in repository Secrets."
             exit 1
           fi
+
       - name: Deploy to server (SSH clone + docker-compose)
         if: success()
         uses: appleboy/ssh-action@v0.1.8
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
-          port: ${{ secrets.DEPLOY_PORT || '22' }}
+          port: ${{ secrets.DEPLOY_PORT }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           passphrase: ${{ secrets.DEPLOY_SSH_PASSPHRASE }}
           script: |
             set -euo pipefail
             REPO="${{ github.repository }}"
-            BRANCH="${{ github.ref_name || 'main' }}"
+            BRANCH="${{ github.ref_name }}"
             DEPLOY_PATH="${{ secrets.DEPLOY_PATH }}"
-            GIT_CLONE_TOKEN="${{ secrets.DEPLOY_TOKEN || '' }}"
+            GIT_CLONE_TOKEN="${{ secrets.DEPLOY_TOKEN }}"
+
             mkdir -p "$DEPLOY_PATH"
             cd "$DEPLOY_PATH"
+
             if [ -d .git ]; then
               echo "Repository exists, fetching latest"
               git fetch --all
@@ -92,6 +87,6 @@ jobs:
                 git clone --single-branch --branch "$BRANCH" "https://github.com/${REPO}.git" .
               fi
             fi
-            # Ensure docker compose is available and start the services
+
             docker compose -f docker-compose.yml pull --ignore-pull-failures || true
             docker compose -f docker-compose.yml up -d --build --remove-orphans
