@@ -8,6 +8,7 @@ jobs:
   test-and-deploy:
     name: Test and deploy
     runs-on: ubuntu-latest
+    environment: production
     steps:
       - name: Debug secrets
         run: |
