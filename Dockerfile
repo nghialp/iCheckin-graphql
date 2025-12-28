@@ -18,7 +18,7 @@ FROM node:24-alpine AS runner
 WORKDIR /app
 
 COPY package.json pnpm-lock.yaml ./
-RUN npm install -g pnpm && pnpm install --prod
+RUN npm install -g pnpm && pnpm install --prod && pnpm approve-builds
 
 # copy built artifacts from builder
 COPY --from=builder /app/dist ./dist

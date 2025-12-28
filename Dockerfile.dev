@@ -8,6 +8,7 @@ WORKDIR /app
 RUN npm install -g pnpm
 COPY package.json pnpm-lock.yaml ./
 RUN pnpm install
+RUN pnpm approve-builds
 
 # Copy toàn bộ mã nguồn
 COPY . .
