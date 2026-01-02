@@ -10,6 +10,9 @@ COPY package.json pnpm-lock.yaml ./
 RUN pnpm install
 RUN pnpm approve-builds
 
+# Copy ormconfig.json cho migration
+COPY ormconfig.json ./
+
 # Copy toàn bộ mã nguồn
 COPY . .
 
@@ -18,6 +21,9 @@ COPY . .
 
 # Mở cổng
 EXPOSE 3000
+
+# Chạy migration trước khi start (optional - có thể comment nếu không muốn)
+RUN npm run migration:run || echo "Migration completed or skipped"
 
 # Chạy ở chế độ dev
 CMD ["pnpm", "start:dev"]

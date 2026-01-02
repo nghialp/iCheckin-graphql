@@ -2,12 +2,25 @@
 # THIS FILE WAS AUTOMATICALLY GENERATED (DO NOT MODIFY)
 # ------------------------------------------------------
 
+type Place {
+  id: ID!
+  name: String!
+  address: String
+  types: [String!]
+  rating: Float
+  thumbnail: String
+  googlePlaceId: String
+  lat: Float!
+  lng: Float!
+}
+
 type Checkin {
   id: ID!
   user: User!
-  location: String!
-  note: String
+  place: Place!
   checkedAt: DateTime!
+  status: String!
+  mood: String
 }
 
 """
@@ -30,18 +43,50 @@ enum FriendshipStatus {
   REJECTED
 }
 
+type Media {
+  id: ID!
+  post: Post!
+  type: String!
+  url: String!
+  size: Float
+  checksum: String
+}
+
+type Comment {
+  id: ID!
+  post: Post!
+  user: User!
+  content: String!
+  createdAt: DateTime!
+  parent_id: String
+}
+
+type Post {
+  id: ID!
+  user: User!
+  place: Place
+  content: String!
+  tags: [String!]
+  cost: Float
+  rating: Float
+  media: [Media!]
+  createdAt: DateTime!
+}
+
 type User {
   id: ID!
   name: String!
   email: String!
-  password: String!
   avatar: String
   points: Float!
   level: Float!
-  refreshToken: String!
   sentFriendRequests: [Friendship!]!
   checkins: [Checkin!]!
   receivedFriendRequests: [Friendship!]!
+  bio: String
+  country: String
+  interests: [String!]
+  privacy_settings: String
 }
 
 type AuthResponse {
@@ -50,24 +95,43 @@ type AuthResponse {
   user: User!
 }
 
+type SearchPlace {
+  googlePlaceId: String
+  name: String!
+  rating: Float
+  address: String
+  types: [String!]
+  lat: Float!
+  lng: Float!
+  thumbnail: String
+}
+
 type Query {
   getUsers: [User!]!
   getUser(id: String!): User!
   getProfile: User!
   myFriends: [User!]!
   myCheckins: [Checkin!]!
-  checkinsAt(location: String!): [Checkin!]!
+  nearestPlaces(lat: Float!, lng: Float!): [Place!]!
+  searchPlaces(keyword: String!, lat: Float!, lng: Float!): [SearchPlace!]!
+  nearbyPlaces(lat: Float!, lng: Float!, radius: Float): [SearchPlace!]!
+  getPost(id: String!): Post
 }
 
 type Mutation {
   signup(input: SignupInput!): AuthResponse!
   login(input: LoginInput!): AuthResponse!
   oauthLogin(input: OAuthInput!): AuthResponse!
-  refreshToken(token: String!): AuthResponse!
+  refreshToken(refreshToken: String!): AuthResponse!
+  changePassword(userId: String!, currentPassword: String!, newPassword: String!): AuthResponse!
+  forgetPassword(email: String!): AuthResponse!
   sendFriendRequest(toUserId: String!): Friendship!
   acceptFriendRequest(requestId: String!): Friendship!
   unfriend(friendId: String!): Boolean!
-  checkin(location: String!, note: String): Checkin!
+  checkin(data: CreateCheckinInput!): Checkin!
+  createPlace(input: CreatePlaceInput!): Place!
+  createComment(postId: String!, content: String!): Comment!
+  createPost(input: CreatePostInput!): Post!
 }
 
 input SignupInput {
@@ -87,4 +151,35 @@ input OAuthInput {
   email: String!
   name: String!
   avatar: String
+}
+
+input CreateCheckinInput {
+  placeId: ID!
+  status: String!
+  mood: String
+}
+
+input CreatePlaceInput {
+  name: String!
+  address: String
+  types: [String!]
+  lat: Float!
+  lng: Float!
+  thumbnail: String
+  googlePlaceId: String
+}
+
+input CreatePostInput {
+  placeId: ID!
+  content: String
+  images: [String!]
+  tags: [String!]
+  cost: Float
+  rating: Float
+  media: [MediaInput!]
+}
+
+input MediaInput {
+  url: String!
+  type: String
 }

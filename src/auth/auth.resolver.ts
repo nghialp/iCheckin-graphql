@@ -35,7 +35,21 @@ export class AuthResolver {
     }
 
     @Mutation(() => AuthResponse)
-    async refreshToken(@Args('token') token: string) {
-        return this.authService.refreshTokenFlow(token);
+    async refreshToken(@Args('refreshToken') refreshToken: string) {
+        return this.authService.refreshTokenFlow(refreshToken);
+    }
+
+    @Mutation(() => AuthResponse)
+    async changePassword(
+        @Args('userId') userId: string,
+        @Args('currentPassword') currentPassword: string,
+        @Args('newPassword') newPassword: string
+    ) {
+        return this.authService.changePassword(userId, currentPassword, newPassword);
+    }
+
+    @Mutation(() => AuthResponse)
+    async forgetPassword(@Args('email') email: string) {
+        return this.authService.forgetPassword(email);
     }
 }

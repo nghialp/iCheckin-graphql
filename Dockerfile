@@ -23,5 +23,12 @@ RUN npm install -g pnpm && pnpm install --prod && pnpm approve-builds
 # copy built artifacts from builder
 COPY --from=builder /app/dist ./dist
 
+# Copy ormconfig.json for migration
+COPY --from=builder /app/ormconfig.json ./
+
 EXPOSE 3000
+
+# Run migration before starting the app
+RUN npm run migration:run
+
 CMD ["pnpm", "start:prod"]

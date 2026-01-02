@@ -2,6 +2,7 @@ import { Field, ID, ObjectType } from "@nestjs/graphql";
 import { Checkin } from "../../checkin/checin.entity";
 import { Friendship } from "../../friendships/friendship.entity";
 import { Column, Entity, OneToMany, PrimaryGeneratedColumn } from "typeorm";
+import { Post } from "src/post/post.entity";
 
 @ObjectType()
 @Entity()
@@ -18,7 +19,7 @@ export class User {
     @Column({ unique: true })
     email: string;
 
-    @Field()
+    // Password - không expose qua GraphQL để bảo mật
     @Column()
     password: string;
 
@@ -34,9 +35,9 @@ export class User {
     @Column({ default: 1 })
     level: number;
 
-    @Field()
+    // RefreshToken - không expose qua GraphQL để bảo mật
     @Column({ nullable: true })
-    refreshToken?: string;    
+    refreshToken?: string;
 
     @Field(() => [Friendship])
     @OneToMany(() => Friendship, f => f.requester)
@@ -49,6 +50,25 @@ export class User {
     @Field(() => [Friendship])
     @OneToMany(() => Friendship, f => f.recipient)
     receivedFriendRequests: Friendship[];
+    
+    @Field({ nullable: true })
+    @Column({ nullable: true })
+    bio?: string;
+
+    @Field({ nullable: true })
+    @Column({ nullable: true })
+    country?: string;
+
+    @Field(() => [String], { nullable: true })
+    @Column('simple-array', { nullable: true })
+    interests?: string[];
+
+    @Field({ nullable: true })
+    @Column({ nullable: true })
+    privacy_settings?: string;
+
+    @OneToMany(() => Post, post => post.user)
+    posts: Post[];
 }
 
 

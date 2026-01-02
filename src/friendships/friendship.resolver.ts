@@ -14,13 +14,13 @@ export class FriendshipResolver {
     }
 
     @Mutation(() => Friendship)
-    acceptFriendRequest(@Args('requestId') requestId: string): Promise<Friendship> {
-        return this.friendshipService.acceptRequest(requestId);
+    acceptFriendRequest(@Args('requestId') requestId: string, @CurrentUser() user: User): Promise<Friendship> {
+        return this.friendshipService.acceptRequest(requestId, user.id);
     }
 
     @Mutation(() => Boolean)
-    unfriend(@Args('friendId') friendId: string, @CurrentUser() user: User): Promise<Friendship> {
-        return this.friendshipService.unfriend(user.id, friendId);
+    unfriend(@Args('friendId') friendId: string, @CurrentUser() user: User): Promise<boolean> {
+        return this.friendshipService.unfriend(user.id, friendId).then(() => true);
     }
 
     @Query(() => [User])

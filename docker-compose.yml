@@ -11,6 +11,17 @@ services:
       - "${DB_PORT:-5432}:5432"
     volumes:
       - icheckin_data:/var/lib/postgresql/data
+  redis:
+    image: redis:latest
+    container_name: icheckin-redis
+    restart: always
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}"]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
   app:
     build: .
     container_name: icheckin-api
@@ -21,5 +32,7 @@ services:
       - "${APP_PORT:-3000}:3000"
     depends_on:
       - postgres
+      - redis 
 volumes:
   icheckin_data:
+  redis_data:

@@ -8,6 +8,7 @@ import { JwtStrategy } from "./strategies/jwt.strategy";
 import { GqlAuthGuard } from "./guards/gql-auth.guard";
 import { GoogleStrategy } from "./strategies/google.strategy";
 import { FacebookStrategy } from "./strategies/facebook.strategy";
+import { MailModule } from "src/mail/mail.module";
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { FacebookStrategy } from "./strategies/facebook.strategy";
     }),
     UserModule,
     PassportModule,
+    MailModule,
   ],
   providers: [
     AuthService,

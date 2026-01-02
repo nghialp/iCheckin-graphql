@@ -5,27 +5,30 @@ import { GqlAuthGuard } from 'src/auth/guards/gql-auth.guard';
 import { UseGuards } from '@nestjs/common';
 import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
 import { User } from 'src/user/entities/user.entity';
+import { CreateCheckinInput } from './dto/checkin.input';
+import { PlaceService } from 'src/place/place.service';
 
 
 @Resolver(() => Checkin)
 export class CheckinResolver {
-    constructor(private checkinService: CheckinService) {}
+    constructor(
+        private checkinService: CheckinService,
+        private placeService: PlaceService,
+    ) { }
 
     @Mutation(() => Checkin)
     @UseGuards(GqlAuthGuard)
-    checkin(@Args('location') location: string, @Args('note', { nullable: true }) note: string, @CurrentUser() user: User) {
-    return this.checkinService.createCheckin(user.id, location, note);
+    async checkin(@Args('data') data: CreateCheckinInput, @CurrentUser() user: User) {
+        const place = await this.placeService.findOneBy({ id: data.placeId });
+        if (!place) {
+            throw new Error('Place not found');
+        }
+        return this.checkinService.createCheckin(user, place, data.status, data.mood);
     }
 
     @Query(() => [Checkin])
     @UseGuards(GqlAuthGuard)
-    myCheckins(@CurrentUser() user: User) {
-    return this.checkinService.getUserCheckins(user.id);
+    async myCheckins(@CurrentUser() user: User) {
+        return this.checkinService.getUserCheckins(user.id);
     }
-
-    @Query(() => [Checkin])
-    checkinsAt(@Args('location') location: string) {
-    return this.checkinService.getCheckinsByLocation(location);
-    }
-
 }

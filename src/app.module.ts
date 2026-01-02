@@ -1,16 +1,31 @@
-import { Module } from '@nestjs/common';
+import { Module,  } from '@nestjs/common';
 import { GraphQLModule } from '@nestjs/graphql';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { UserModule } from './user/user.module';
 import { ConfigModule } from '@nestjs/config';
 import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
+import { CacheModule } from '@nestjs/cache-manager';
+import * as redisStore from 'cache-manager-redis-store';
 import { join } from 'path';
 import { AuthModule } from './auth/auth.module';
 import { FriendshipModule } from './friendships/friendship.module';
 import { CheckinModule } from './checkin/checkin.module';
+import { MailModule } from './mail/mail.module';
+import { CommentModule } from './comment/comment.module';
+import { PlaceModule } from './place/place.module';
+import { PostModule } from './post/post.module';
 
 @Module({
   imports: [
+    CacheModule.registerAsync({
+      useFactory: () => ({
+        store: redisStore,
+        host: process.env.REDIS_HOST || 'localhost',
+        port: parseInt(process.env.REDIS_PORT || '6379', 10),
+        auth_pass: process.env.REDIS_PASSWORD || undefined,
+        ttl: 60, // thời gian cache mặc định (giây)
+      }),
+    }),
     GraphQLModule.forRoot<ApolloDriverConfig>({
       driver: ApolloDriver,
       autoSchemaFile: join(process.cwd(), 'src/schema.gql'),
@@ -31,10 +46,10 @@ import { CheckinModule } from './checkin/checkin.module';
     AuthModule,
     FriendshipModule,
     CheckinModule,
+    CommentModule,
+    PlaceModule,
+    PostModule,
+    MailModule
   ],
 })
 export class AppModule {}
-
-function ApolloServerPluginLandingPageLocalDefault() {
-  throw new Error('Function not implemented.');
-}
