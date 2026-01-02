@@ -25,7 +25,7 @@ export class SearchPlace {
 	lng: number;
 
 	@Field(() => String, { nullable: true })
-	thumbnail?: string | null;
+	thumbnail?: string;
 }
 
 @InputType()

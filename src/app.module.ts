@@ -14,6 +14,7 @@ import { MailModule } from './mail/mail.module';
 import { CommentModule } from './comment/comment.module';
 import { PlaceModule } from './place/place.module';
 import { PostModule } from './post/post.module';
+import { CommonModule } from './common/common.module';
 
 @Module({
   imports: [
@@ -49,7 +50,8 @@ import { PostModule } from './post/post.module';
     CommentModule,
     PlaceModule,
     PostModule,
-    MailModule
+    MailModule,
+    CommonModule,
   ],
 })
 export class AppModule {}

@@ -115,6 +115,8 @@ type Query {
   nearestPlaces(lat: Float!, lng: Float!): [Place!]!
   searchPlaces(keyword: String!, lat: Float!, lng: Float!): [SearchPlace!]!
   nearbyPlaces(lat: Float!, lng: Float!, radius: Float): [SearchPlace!]!
+  getPostComments(postId: String!): [Comment!]!
+  getComment(id: String!): Comment
   getPost(id: String!): Post
 }
 
@@ -131,6 +133,8 @@ type Mutation {
   checkin(data: CreateCheckinInput!): Checkin!
   createPlace(input: CreatePlaceInput!): Place!
   createComment(postId: String!, content: String!): Comment!
+  updateComment(id: String!, content: String!): Comment!
+  deleteComment(id: String!): Boolean!
   createPost(input: CreatePostInput!): Post!
 }
 
@@ -154,7 +158,8 @@ input OAuthInput {
 }
 
 input CreateCheckinInput {
-  placeId: ID!
+  placeId: ID
+  googlePlaceId: String
   status: String!
   mood: String
 }

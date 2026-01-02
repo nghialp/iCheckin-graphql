@@ -9,7 +9,10 @@ import type { Cache } from 'cache-manager';
 
 // Constants for API configuration
 const GOOGLE_PLACES_API_BASE = 'https://maps.googleapis.com/maps/api/place';
-const CACHE_TTL = 3600; // 1 hour
+const CACHE_TTL_PHOTO = 3600; // 1 hour for photos
+const CACHE_TTL_PLACE_DETAILS = 24 * 60 * 60; // 24 hours for place details
+const CACHE_TTL_NEARBY = 3600; // 1 hour for nearby search
+const CACHE_TTL_SEARCH = 7200; // 2 hours for text search
 
 // Interfaces for Google Places API responses
 interface GooglePlacePhoto {
@@ -60,12 +63,12 @@ export class PlaceService {
 	constructor(
 		@InjectRepository(Place)
 		private placeRepo: Repository<Place>,
-		@Inject(CACHE_MANAGER) private cacheManager: Cache
+		@Inject(CACHE_MANAGER) private cacheManager: Cache,
 	) { }
 
 	// get photo from REST API
-	getThumbnailUrl(photoReference?: string): string | null {
-		if (!photoReference) return null;
+	getThumbnailUrl(photoReference?: string): string | undefined {
+		if (!photoReference) return undefined;
 		return `${this.API_BASE}/places/photo/${photoReference}`;
 	}
 
@@ -73,7 +76,7 @@ export class PlaceService {
 	async getPhotoStream(reference: string): Promise<StreamableFile> {
 		this.logger.log(`Fetching photo with reference: ${reference.substring(0, 10)}...`);
 
-		// Kiểm tra cache trước
+		// Check cache first using CACHE_MANAGER
 		const cached = await this.cacheManager.get<string>(reference);
 		if (cached) {
 			this.logger.debug(`Cache hit for photo reference: ${reference.substring(0, 10)}...`);
@@ -82,15 +85,15 @@ export class PlaceService {
 			});
 		}
 
-		// Nếu chưa có cache → gọi Google API
+		// If not cached → call Google API
 		const url = `${GOOGLE_PLACES_API_BASE}/photo?maxwidth=400&photoreference=${reference}&key=${this.GOOGLE_MAPS_API_KEY}`;
 
 		try {
 			const response = await axios.get(url, { responseType: 'arraybuffer' });
 			const base64Data = Buffer.from(response.data).toString('base64');
 
-			// Lưu vào Redis (TTL 1h)
-			await this.cacheManager.set(reference, base64Data, CACHE_TTL);
+			// Save to Redis via CACHE_MANAGER
+			await this.cacheManager.set(reference, base64Data, CACHE_TTL_PHOTO);
 			this.logger.debug(`Photo cached successfully`);
 
 			return new StreamableFile(response.data, {
@@ -109,8 +112,89 @@ export class PlaceService {
 		return this.placeRepo.save(place);
 	}
 
-	async findOneBy(options: Omit<Partial<Place>, 'coordinates' | 'types'>): Promise<Place | null> {
+	async findOneBy(options: Omit<Partial<Place>, 'coordinates' | 'types' | 'thumbnail'>): Promise<Place | null> {
 		return this.placeRepo.findOneBy(options);
+	}
+
+	/**
+	 * Find place by googlePlaceId, if not found call Google API and create new
+	 * Using CACHE_MANAGER (Redis) to reduce API calls
+	 */
+	async findOrCreateFromGooglePlaceId(googlePlaceId: string): Promise<Place> {
+		this.logger.log(`Finding or creating place from Google Place ID: ${googlePlaceId}`);
+		const cacheKey = `place:details:${googlePlaceId}`;
+
+		// 1. Check cache first
+		const cached = await this.cacheManager.get<string>(cacheKey);
+		if (cached) {
+			this.logger.debug(`Cache hit for place: ${googlePlaceId}`);
+			const cachedData = JSON.parse(cached);
+			const existingPlace = await this.placeRepo.findOne({
+				where: { googlePlaceId },
+			});
+			if (existingPlace) {
+				return existingPlace;
+			}
+		}
+
+		// 2. Find in database
+		const existingPlace = await this.placeRepo.findOne({
+			where: { googlePlaceId },
+		});
+
+		if (existingPlace) {
+			this.logger.log(`Found existing place: ${existingPlace.id}`);
+			// Cache in Redis via CACHE_MANAGER
+			await this.cacheManager.set(cacheKey, JSON.stringify({
+				place_id: existingPlace.googlePlaceId,
+				name: existingPlace.name,
+				address: existingPlace.address,
+				rating: existingPlace.rating,
+				types: existingPlace.types,
+				lat: existingPlace.lat,
+				lng: existingPlace.lng,
+				thumbnail: existingPlace.thumbnail,
+			}), CACHE_TTL_PLACE_DETAILS);
+			return existingPlace;
+		}
+
+		// 3. If not found → call Google Places Details API
+		this.logger.log(`Fetching from Google API: ${googlePlaceId}`);
+		const url = `${GOOGLE_PLACES_API_BASE}/details/json?place_id=${googlePlaceId}&fields=place_id,name,formatted_address,rating,types,geometry,photos&key=${this.GOOGLE_MAPS_API_KEY}`;
+
+		try {
+			const response = await axios.get(url);
+
+			if (response.data.status !== 'OK' || !response.data.result) {
+				throw new Error(`Google Places API error: ${response.data.status}`);
+			}
+
+			const placeData = response.data.result;
+
+			// 4. Create new place from Google data
+			const newPlace = this.placeRepo.create({
+				googlePlaceId: placeData.place_id,
+				name: placeData.name,
+				address: placeData.formatted_address,
+				rating: placeData.rating,
+				types: placeData.types,
+				lat: placeData.geometry.location.lat,
+				lng: placeData.geometry.location.lng,
+				thumbnail: this.getThumbnailUrl(placeData.photos[0].photo_reference),
+			});
+
+			const savedPlace = await this.placeRepo.save(newPlace);
+			this.logger.log(`Created new place: ${savedPlace.id}`);
+
+			// 5. Cache via CACHE_MANAGER
+			await this.cacheManager.set(cacheKey, JSON.stringify(placeData), CACHE_TTL_PLACE_DETAILS);
+
+			return savedPlace;
+		} catch (error) {
+			const axiosError = error as AxiosError;
+			this.logger.error(`Failed to fetch place details: ${axiosError.message}`);
+			throw new Error('Không thể lấy thông tin địa điểm từ Google Maps');
+		}
 	}
 
 	async findNearestPlaces(keyword: string, lat: number, lng: number): Promise<Place[]> {
@@ -151,7 +235,7 @@ export class PlaceService {
 	}
 
 	/**
-	 * Reverse geocoding: lấy địa chỉ từ tọa độ
+	 * Reverse geocoding: get address from coordinates
 	 */
 	async getAddressFromCoordinates(lat: number, lng: number): Promise<string | null> {
 		this.logger.log(`Reverse geocoding for coordinates: (${lat}, ${lng})`);
@@ -181,7 +265,8 @@ export class PlaceService {
 	}
 
 	/**
-	 * Places Nearby: lấy danh sách địa điểm gần tọa độ
+	 * Places Nearby: get list of places near coordinates
+	 * Using CACHE_MANAGER to reduce API calls
 	 */
 	async getNearbyPlaces(lat: number, lng: number, radius: number = 500): Promise<SearchPlace[]> {
 		this.logger.log(`Getting nearby places at (${lat}, ${lng}) with radius: ${radius}m`);
@@ -191,13 +276,22 @@ export class PlaceService {
 			throw new Error('Bán kính tìm kiếm phải từ 1 đến 50000 mét');
 		}
 
+		const cacheKey = `place:nearby:${lat},${lng}:${radius}`;
+
+		// Check cache first
+		const cached = await this.cacheManager.get<string>(cacheKey);
+		if (cached) {
+			this.logger.debug(`Cache hit for nearby places`);
+			return JSON.parse(cached);
+		}
+
 		const url = `${GOOGLE_PLACES_API_BASE}/nearbysearch/json?location=${lat},${lng}&radius=${radius}&key=${this.GOOGLE_MAPS_API_KEY}`;
 
 		try {
 			const response = await axios.get<GooglePlacesApiResponse>(url);
 
 			if (response.data.status === 'OK') {
-				return response.data.results.map((place: GooglePlaceResult) => ({
+				const results = response.data.results.map((place: GooglePlaceResult) => ({
 					googlePlaceId: place.place_id,
 					name: place.name,
 					address: place.formatted_address || place.vicinity || '',
@@ -207,6 +301,11 @@ export class PlaceService {
 					lng: place.geometry.location.lng,
 					thumbnail: this.getThumbnailUrl(place.photos?.[0]?.photo_reference),
 				}));
+
+				// Cache for 1 hour (nearby search changes more frequently)
+				await this.cacheManager.set(cacheKey, JSON.stringify(results), CACHE_TTL_NEARBY);
+
+				return results;
 			}
 
 			if (response.data.error_message) {
@@ -221,7 +320,9 @@ export class PlaceService {
 		}
 	}
 
-	// ✅ Search địa điểm theo keyword
+	/**
+	 * Search places by keyword with caching
+	 */
 	async searchPlacesByKeyword(
 		keyword: string,
 		lat?: number,
@@ -234,9 +335,19 @@ export class PlaceService {
 			throw new Error('Từ khóa tìm kiếm không được để trống');
 		}
 
+		// Create cache key
+		const cacheKey = `place:search:${keyword}:${lat}:${lng}:${radius}`;
+
+		// Check cache first
+		const cached = await this.cacheManager.get<string>(cacheKey);
+		if (cached) {
+			this.logger.debug(`Cache hit for search: ${keyword}`);
+			return JSON.parse(cached);
+		}
+
 		let url: string;
 
-		// Nếu có tọa độ thì ưu tiên tìm quanh vị trí đó
+		// If coordinates provided, search nearby first
 		if (lat !== undefined && lng !== undefined) {
 			if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
 				throw new Error('Tọa độ không hợp lệ');
@@ -254,7 +365,7 @@ export class PlaceService {
 			const response = await axios.get<GooglePlacesApiResponse>(url);
 
 			if (response.data.status === 'OK') {
-				return response.data.results.map((place: GooglePlaceResult) => ({
+				const results = response.data.results.map((place: GooglePlaceResult) => ({
 					googlePlaceId: place.place_id,
 					name: place.name,
 					address: place.formatted_address || place.vicinity || '',
@@ -264,6 +375,11 @@ export class PlaceService {
 					lng: place.geometry.location.lng,
 					thumbnail: this.getThumbnailUrl(place.photos?.[0]?.photo_reference),
 				}));
+
+				// Cache for 2 hours (text search results are more stable)
+				await this.cacheManager.set(cacheKey, JSON.stringify(results), CACHE_TTL_SEARCH);
+
+				return results;
 			}
 
 			if (response.data.error_message) {
@@ -278,3 +394,4 @@ export class PlaceService {
 		}
 	}
 }
+
