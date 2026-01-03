@@ -6,7 +6,7 @@ export class CreateCheckinInput {
   placeId?: string;
 
   @Field({ nullable: true })
-  googlePlaceId?: string;
+  mapboxId?: string;
 
   @Field()
   status: string;

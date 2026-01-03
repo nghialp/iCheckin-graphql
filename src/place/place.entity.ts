@@ -5,16 +5,16 @@ import { Checkin } from 'src/checkin/checin.entity';
 @ObjectType()
 @Entity()
 export class Place {
-@Field(() => ID)
+  @Field(() => ID)
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  // Tên địa điểm (Google Maps name)
+  // Tên địa điểm
   @Field()
   @Column()
   name: string;
 
-  // Địa chỉ đầy đủ (formatted_address hoặc vicinity)
+  // Địa chỉ đầy đủ
   @Field({ nullable: true })
   @Column({ nullable: true })
   address?: string;
@@ -24,28 +24,28 @@ export class Place {
   @Column('simple-array', { nullable: true })
   types?: string[];
 
-  // Rating từ Google Maps
+  // Rating
   @Field(() => Float, { nullable: true })
   @Column('decimal', { precision: 3, scale: 2, nullable: true })
   rating?: number;
 
-  // Thumbnail (Google photo reference → URL)
+  // Thumbnail URL (Mapbox static image)
   @Field({ nullable: true })
   @Column({ nullable: true })
   thumbnail?: string;
 
-  // Google Place ID (để tham chiếu lại API)
+  // Mapbox Place ID (để tham chiếu lại API)
   @Field({ nullable: true })
   @Column({ nullable: true })
-  googlePlaceId?: string;
+  mapboxId?: string;
 
   @Column({ nullable: true })
   @Field(() => Float)
-	lat: number;
+  lat: number;
 
   @Column({ nullable: true })
-	@Field(() => Float)
-	lng: number;
+  @Field(() => Float)
+  lng: number;
 
   @OneToMany(() => Checkin, checkin => checkin.place)
   checkins: Checkin[];

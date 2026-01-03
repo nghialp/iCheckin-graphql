@@ -6,147 +6,63 @@ import { Place } from "./place.entity";
 import { CreatePlaceInput, SearchPlace } from "./dto/place.input";
 import { CACHE_MANAGER } from "@nestjs/cache-manager";
 import type { Cache } from 'cache-manager';
+import { MapboxPlacesService } from "src/common/services/mapbox-places.service";
 
 // Constants for API configuration
-const GOOGLE_PLACES_API_BASE = 'https://maps.googleapis.com/maps/api/place';
-const CACHE_TTL_PHOTO = 3600; // 1 hour for photos
 const CACHE_TTL_PLACE_DETAILS = 24 * 60 * 60; // 24 hours for place details
 const CACHE_TTL_NEARBY = 3600; // 1 hour for nearby search
 const CACHE_TTL_SEARCH = 7200; // 2 hours for text search
 
-// Interfaces for Google Places API responses
-interface GooglePlacePhoto {
-	photo_reference: string;
-	height: number;
-	width: number;
-}
-
-interface GooglePlaceGeometry {
-	location: {
-		lat: number;
-		lng: number;
-	};
-}
-
-interface GooglePlaceResult {
-	place_id: string;
-	name: string;
-	formatted_address?: string;
-	vicinity?: string;
-	rating?: number;
-	types: string[];
-	photos?: GooglePlacePhoto[];
-	geometry: GooglePlaceGeometry;
-}
-
-interface GooglePlacesApiResponse {
-	status: string;
-	results: GooglePlaceResult[];
-	error_message?: string;
-}
-
-interface GeocodingResult {
-	formatted_address: string;
-}
-
-interface GeocodingApiResponse {
-	status: string;
-	results: GeocodingResult[];
-}
-
 @Injectable()
 export class PlaceService {
 	private readonly logger = new Logger(PlaceService.name);
-	private readonly GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
+	private readonly MAPBOX_ACCESS_TOKEN = process.env.MAPBOX_ACCESS_TOKEN;
 	private readonly API_BASE = process.env.API_BASE_URL;
 
 	constructor(
 		@InjectRepository(Place)
 		private placeRepo: Repository<Place>,
 		@Inject(CACHE_MANAGER) private cacheManager: Cache,
+		private mapboxService: MapboxPlacesService,
 	) { }
 
-	// get photo from REST API
-	getThumbnailUrl(photoReference?: string): string | undefined {
-		if (!photoReference) return undefined;
-		return `${this.API_BASE}/places/photo/${photoReference}`;
-	}
-
-	// load image from google map
-	async getPhotoStream(reference: string): Promise<StreamableFile> {
-		this.logger.log(`Fetching photo with reference: ${reference.substring(0, 10)}...`);
-
-		// Check cache first using CACHE_MANAGER
-		const cached = await this.cacheManager.get<string>(reference);
-		if (cached) {
-			this.logger.debug(`Cache hit for photo reference: ${reference.substring(0, 10)}...`);
-			return new StreamableFile(Buffer.from(cached, 'base64'), {
-				type: 'image/jpeg',
-			});
-		}
-
-		// If not cached → call Google API
-		const url = `${GOOGLE_PLACES_API_BASE}/photo?maxwidth=400&photoreference=${reference}&key=${this.GOOGLE_MAPS_API_KEY}`;
-
-		try {
-			const response = await axios.get(url, { responseType: 'arraybuffer' });
-			const base64Data = Buffer.from(response.data).toString('base64');
-
-			// Save to Redis via CACHE_MANAGER
-			await this.cacheManager.set(reference, base64Data, CACHE_TTL_PHOTO);
-			this.logger.debug(`Photo cached successfully`);
-
-			return new StreamableFile(response.data, {
-				type: response.headers['content-type'] || 'image/jpeg',
-			});
-		} catch (error) {
-			const axiosError = error as AxiosError;
-			this.logger.error(`Failed to fetch photo from Google API: ${axiosError.message}`);
-			throw new Error('Không thể tải ảnh từ Google Maps');
-		}
-	}
-
-	async createPlace(placeInput: CreatePlaceInput): Promise<Place> {
-		this.logger.log(`Creating place: ${placeInput.name}`);
-		const place = this.placeRepo.create(placeInput);
-		return this.placeRepo.save(place);
-	}
-
-	async findOneBy(options: Omit<Partial<Place>, 'coordinates' | 'types' | 'thumbnail'>): Promise<Place | null> {
-		return this.placeRepo.findOneBy(options);
+	// get thumbnail URL from coordinates
+	getThumbnailUrl(lat: number, lng: number, name?: string): string | undefined {
+		return this.mapboxService.getThumbnailUrl(lat, lng, name);
 	}
 
 	/**
-	 * Find place by googlePlaceId, if not found call Google API and create new
+	 * Find place by mapboxId, if not found call Mapbox API and create new
 	 * Using CACHE_MANAGER (Redis) to reduce API calls
 	 */
-	async findOrCreateFromGooglePlaceId(googlePlaceId: string): Promise<Place> {
-		this.logger.log(`Finding or creating place from Google Place ID: ${googlePlaceId}`);
-		const cacheKey = `place:details:${googlePlaceId}`;
+	async findOrCreateFromMapboxId(mapboxId: string): Promise<Place> {
+		this.logger.log(`Finding or creating place from Mapbox ID: ${mapboxId}`);
+		const cacheKey = `place:details:${mapboxId}`;
 
 		// 1. Check cache first
 		const cached = await this.cacheManager.get<string>(cacheKey);
 		if (cached) {
-			this.logger.debug(`Cache hit for place: ${googlePlaceId}`);
+			this.logger.debug(`Cache hit for place: ${mapboxId}`);
 			const cachedData = JSON.parse(cached);
-			const existingPlace = await this.placeRepo.findOne({
-				where: { googlePlaceId },
-			});
-			if (existingPlace) {
-				return existingPlace;
-			}
+			return cachedData;
+			// const existingPlace = await this.placeRepo.findOne({
+			// 	where: { mapboxId },
+			// });
+			// if (existingPlace) {
+			// 	return existingPlace;
+			// }
 		}
 
 		// 2. Find in database
 		const existingPlace = await this.placeRepo.findOne({
-			where: { googlePlaceId },
+			where: { mapboxId },
 		});
 
 		if (existingPlace) {
 			this.logger.log(`Found existing place: ${existingPlace.id}`);
 			// Cache in Redis via CACHE_MANAGER
 			await this.cacheManager.set(cacheKey, JSON.stringify({
-				place_id: existingPlace.googlePlaceId,
+				mapboxId: existingPlace.mapboxId,
 				name: existingPlace.name,
 				address: existingPlace.address,
 				rating: existingPlace.rating,
@@ -158,29 +74,28 @@ export class PlaceService {
 			return existingPlace;
 		}
 
-		// 3. If not found → call Google Places Details API
-		this.logger.log(`Fetching from Google API: ${googlePlaceId}`);
-		const url = `${GOOGLE_PLACES_API_BASE}/details/json?place_id=${googlePlaceId}&fields=place_id,name,formatted_address,rating,types,geometry,photos&key=${this.GOOGLE_MAPS_API_KEY}`;
-
+		// 3. If not found → call Mapbox Places API
+		this.logger.log(`Fetching from Mapbox API: ${mapboxId}`);
+		
 		try {
-			const response = await axios.get(url);
+			const placeData = await this.mapboxService.getPlaceDetails(mapboxId);
 
-			if (response.data.status !== 'OK' || !response.data.result) {
-				throw new Error(`Google Places API error: ${response.data.status}`);
+			if (!placeData) {
+				throw new Error(`Place not found in Mapbox: ${mapboxId}`);
 			}
 
-			const placeData = response.data.result;
+			const transformedData = this.mapboxService.transformToPlace(placeData);
 
-			// 4. Create new place from Google data
+			// 4. Create new place from Mapbox data
 			const newPlace = this.placeRepo.create({
-				googlePlaceId: placeData.place_id,
-				name: placeData.name,
-				address: placeData.formatted_address,
-				rating: placeData.rating,
-				types: placeData.types,
-				lat: placeData.geometry.location.lat,
-				lng: placeData.geometry.location.lng,
-				thumbnail: this.getThumbnailUrl(placeData.photos[0].photo_reference),
+				mapboxId: transformedData.mapboxId,
+				name: transformedData.name,
+				address: transformedData.address,
+				rating: transformedData.rating,
+				types: transformedData.types,
+				lat: transformedData.lat,
+				lng: transformedData.lng,
+				thumbnail: transformedData.thumbnail,
 			});
 
 			const savedPlace = await this.placeRepo.save(newPlace);
@@ -192,9 +107,19 @@ export class PlaceService {
 			return savedPlace;
 		} catch (error) {
 			const axiosError = error as AxiosError;
-			this.logger.error(`Failed to fetch place details: ${axiosError.message}`);
-			throw new Error('Không thể lấy thông tin địa điểm từ Google Maps');
+			this.logger.error(`Failed to fetch place details: ${axiosError?.message || String(error)}`);
+			throw new Error('Không thể lấy thông tin địa điểm từ Mapbox');
 		}
+	}
+
+	async createPlace(placeInput: CreatePlaceInput): Promise<Place> {
+		this.logger.log(`Creating place: ${placeInput.name}`);
+		const place = this.placeRepo.create(placeInput);
+		return this.placeRepo.save(place);
+	}
+
+	async findOneBy(options: Omit<Partial<Place>, 'coordinates' | 'types' | 'thumbnail'>): Promise<Place | null> {
+		return this.placeRepo.findOneBy(options);
 	}
 
 	async findNearestPlaces(keyword: string, lat: number, lng: number): Promise<Place[]> {
@@ -246,20 +171,12 @@ export class PlaceService {
 			throw new Error('Tọa độ không hợp lệ');
 		}
 
-		const url = `${GOOGLE_PLACES_API_BASE}/geocode/json?latlng=${lat},${lng}&key=${this.GOOGLE_MAPS_API_KEY}`;
-
 		try {
-			const response = await axios.get<GeocodingApiResponse>(url);
-
-			if (response.data.status === 'OK' && response.data.results.length > 0) {
-				return response.data.results[0].formatted_address;
-			}
-
-			this.logger.warn(`Geocoding API returned status: ${response.data.status}`);
-			return null;
+			const address = await this.mapboxService.reverseGeocode(lat, lng);
+			return address;
 		} catch (error) {
 			const axiosError = error as AxiosError;
-			this.logger.error(`Geocoding API error: ${axiosError.message}`);
+			this.logger.error(`Reverse geocoding error: ${axiosError?.message || String(error)}`);
 			throw new Error('Không thể lấy địa chỉ từ tọa độ');
 		}
 	}
@@ -285,37 +202,20 @@ export class PlaceService {
 			return JSON.parse(cached);
 		}
 
-		const url = `${GOOGLE_PLACES_API_BASE}/nearbysearch/json?location=${lat},${lng}&radius=${radius}&key=${this.GOOGLE_MAPS_API_KEY}`;
-
 		try {
-			const response = await axios.get<GooglePlacesApiResponse>(url);
+			const features = await this.mapboxService.searchNearby(lng, lat, radius);
+			
+			const results = features.map((feature) => 
+				this.mapboxService.transformToSearchPlace(feature)
+			);
 
-			if (response.data.status === 'OK') {
-				const results = response.data.results.map((place: GooglePlaceResult) => ({
-					googlePlaceId: place.place_id,
-					name: place.name,
-					address: place.formatted_address || place.vicinity || '',
-					rating: place.rating,
-					types: place.types,
-					lat: place.geometry.location.lat,
-					lng: place.geometry.location.lng,
-					thumbnail: this.getThumbnailUrl(place.photos?.[0]?.photo_reference),
-				}));
+			// Cache for 1 hour (nearby search changes more frequently)
+			await this.cacheManager.set(cacheKey, JSON.stringify(results), CACHE_TTL_NEARBY);
 
-				// Cache for 1 hour (nearby search changes more frequently)
-				await this.cacheManager.set(cacheKey, JSON.stringify(results), CACHE_TTL_NEARBY);
-
-				return results;
-			}
-
-			if (response.data.error_message) {
-				this.logger.error(`Google Places API error: ${response.data.error_message}`);
-			}
-
-			return [];
+			return results;
 		} catch (error) {
 			const axiosError = error as AxiosError;
-			this.logger.error(`Nearby places API error: ${axiosError.message}`);
+			this.logger.error(`Nearby places API error: ${axiosError?.message || String(error)}`);
 			throw new Error('Không thể tìm kiếm địa điểm lân cận');
 		}
 	}
@@ -345,51 +245,34 @@ export class PlaceService {
 			return JSON.parse(cached);
 		}
 
-		let url: string;
-
-		// If coordinates provided, search nearby first
-		if (lat !== undefined && lng !== undefined) {
-			if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
-				throw new Error('Tọa độ không hợp lệ');
-			}
-			url = `${GOOGLE_PLACES_API_BASE}/nearbysearch/json?location=${lat},${lng}&radius=${radius}&keyword=${encodeURIComponent(
-				keyword,
-			)}&key=${this.GOOGLE_MAPS_API_KEY}`;
-		} else {
-			url = `${GOOGLE_PLACES_API_BASE}/textsearch/json?query=${encodeURIComponent(
-				keyword,
-			)}&key=${this.GOOGLE_MAPS_API_KEY}`;
-		}
-
 		try {
-			const response = await axios.get<GooglePlacesApiResponse>(url);
-
-			if (response.data.status === 'OK') {
-				const results = response.data.results.map((place: GooglePlaceResult) => ({
-					googlePlaceId: place.place_id,
-					name: place.name,
-					address: place.formatted_address || place.vicinity || '',
-					rating: place.rating,
-					types: place.types,
-					lat: place.geometry.location.lat,
-					lng: place.geometry.location.lng,
-					thumbnail: this.getThumbnailUrl(place.photos?.[0]?.photo_reference),
-				}));
-
-				// Cache for 2 hours (text search results are more stable)
-				await this.cacheManager.set(cacheKey, JSON.stringify(results), CACHE_TTL_SEARCH);
-
-				return results;
+			// If coordinates provided, search with proximity
+			let features;
+			if (lat !== undefined && lng !== undefined) {
+				if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+					throw new Error('Tọa độ không hợp lệ');
+				}
+				features = await this.mapboxService.searchByText(keyword, {
+					proximity: [lng, lat],
+					limit: 10,
+				});
+			} else {
+				features = await this.mapboxService.searchByText(keyword, {
+					limit: 10,
+				});
 			}
 
-			if (response.data.error_message) {
-				this.logger.error(`Google Places API error: ${response.data.error_message}`);
-			}
+			const results = features.map((feature) => 
+				this.mapboxService.transformToSearchPlace(feature)
+			);
 
-			return [];
+			// Cache for 2 hours (text search results are more stable)
+			await this.cacheManager.set(cacheKey, JSON.stringify(results), CACHE_TTL_SEARCH);
+
+			return results;
 		} catch (error) {
 			const axiosError = error as AxiosError;
-			this.logger.error(`Search places API error: ${axiosError.message}`);
+			this.logger.error(`Search places API error: ${axiosError?.message || String(error)}`);
 			throw new Error('Không thể tìm kiếm địa điểm');
 		}
 	}

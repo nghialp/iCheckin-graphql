@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { RateLimitMiddleware } from './middleware/rate-limit.middleware';
-import { GooglePlacesCacheService } from './services/google-places-cache.service';
+import { MapboxPlacesService } from './services/mapbox-places.service';
+import { MapboxProxyController } from './services/mapbox-proxy.controller';
 import { CacheModule } from '@nestjs/cache-manager';
 import { ConfigModule } from '@nestjs/config';
 
@@ -12,13 +13,14 @@ import { ConfigModule } from '@nestjs/config';
 		}),
 		ConfigModule,
 	],
+	controllers: [MapboxProxyController],
 	providers: [
 		RateLimitMiddleware,
-		GooglePlacesCacheService,
+		MapboxPlacesService,
 	],
 	exports: [
 		RateLimitMiddleware,
-		GooglePlacesCacheService,
+		MapboxPlacesService,
 	],
 })
 export class CommonModule { }

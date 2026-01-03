@@ -9,7 +9,7 @@ type Place {
   types: [String!]
   rating: Float
   thumbnail: String
-  googlePlaceId: String
+  mapboxId: String
   lat: Float!
   lng: Float!
 }
@@ -96,7 +96,7 @@ type AuthResponse {
 }
 
 type SearchPlace {
-  googlePlaceId: String
+  mapboxId: String
   name: String!
   rating: Float
   address: String
@@ -159,7 +159,7 @@ input OAuthInput {
 
 input CreateCheckinInput {
   placeId: ID
-  googlePlaceId: String
+  mapboxId: String
   status: String!
   mood: String
 }
@@ -171,7 +171,7 @@ input CreatePlaceInput {
   lat: Float!
   lng: Float!
   thumbnail: String
-  googlePlaceId: String
+  mapboxId: String
 }
 
 input CreatePostInput {

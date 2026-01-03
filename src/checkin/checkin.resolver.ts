@@ -28,11 +28,11 @@ export class CheckinResolver {
                 throw new Error('Place not found');
             }
         } 
-        // Nếu có googlePlaceId → tìm trong DB trước, nếu chưa có thì gọi Google API và tạo mới
-        else if (data.googlePlaceId) {
-            place = await this.placeService.findOrCreateFromGooglePlaceId(data.googlePlaceId);
+        // Nếu có mapboxId → tìm trong DB trước, nếu chưa có thì gọi Mapbox API và tạo mới
+        else if (data.mapboxId) {
+            place = await this.placeService.findOrCreateFromMapboxId(data.mapboxId);
         } else {
-            throw new Error('Vui lòng cung cấp placeId hoặc googlePlaceId');
+            throw new Error('Vui lòng cung cấp placeId hoặc mapboxId');
         }
 
         return this.checkinService.createCheckin(user, place, data.status, data.mood);
