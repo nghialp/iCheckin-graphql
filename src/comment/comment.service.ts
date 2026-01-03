@@ -62,7 +62,7 @@ export class CommentService {
 
     if (comment.user.id !== userId) {
       this.logger.warn(`User ${userId} attempted to delete comment ${id} owned by ${comment.user.id}`);
-      throw new Error('Bạn không có quyền xóa bình luận này');
+throw new Error('You do not have permission to delete this comment');
     }
 
     await this.commentRepo.remove(comment);
@@ -80,11 +80,11 @@ export class CommentService {
     });
 
     if (!comment) {
-      throw new Error('Bình luận không tồn tại');
+throw new Error('Comment not found');
     }
 
     if (comment.user.id !== userId) {
-      throw new Error('Bạn không có quyền chỉnh sửa bình luận này');
+throw new Error('You do not have permission to edit this comment');
     }
 
     comment.content = content;

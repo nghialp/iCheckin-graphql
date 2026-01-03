@@ -108,7 +108,7 @@ export class PlaceService {
 		} catch (error) {
 			const axiosError = error as AxiosError;
 			this.logger.error(`Failed to fetch place details: ${axiosError?.message || String(error)}`);
-			throw new Error('Không thể lấy thông tin địa điểm từ Mapbox');
+throw new Error('Unable to fetch place details from Mapbox');
 		}
 	}
 
@@ -168,7 +168,7 @@ export class PlaceService {
 		// Validate coordinates
 		if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
 			this.logger.warn(`Invalid coordinates: (${lat}, ${lng})`);
-			throw new Error('Tọa độ không hợp lệ');
+throw new Error('Invalid coordinates');
 		}
 
 		try {
@@ -177,7 +177,7 @@ export class PlaceService {
 		} catch (error) {
 			const axiosError = error as AxiosError;
 			this.logger.error(`Reverse geocoding error: ${axiosError?.message || String(error)}`);
-			throw new Error('Không thể lấy địa chỉ từ tọa độ');
+			throw new Error('Unable to get address from coordinates');
 		}
 	}
 
@@ -190,7 +190,7 @@ export class PlaceService {
 
 		// Validate input
 		if (radius <= 0 || radius > 50000) {
-			throw new Error('Bán kính tìm kiếm phải từ 1 đến 50000 mét');
+throw new Error('Search radius must be between 1 and 50000 meters');
 		}
 
 		const cacheKey = `place:nearby:${lat},${lng}:${radius}`;
@@ -216,7 +216,7 @@ export class PlaceService {
 		} catch (error) {
 			const axiosError = error as AxiosError;
 			this.logger.error(`Nearby places API error: ${axiosError?.message || String(error)}`);
-			throw new Error('Không thể tìm kiếm địa điểm lân cận');
+throw new Error('Unable to search nearby places');
 		}
 	}
 
@@ -232,7 +232,7 @@ export class PlaceService {
 		this.logger.log(`Searching places with keyword: "${keyword}" at (${lat}, ${lng})`);
 
 		if (!keyword || keyword.trim().length === 0) {
-			throw new Error('Từ khóa tìm kiếm không được để trống');
+throw new Error('Search keyword cannot be empty');
 		}
 
 		// Create cache key
@@ -249,8 +249,8 @@ export class PlaceService {
 			// If coordinates provided, search with proximity
 			let features;
 			if (lat !== undefined && lng !== undefined) {
-				if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
-					throw new Error('Tọa độ không hợp lệ');
+if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+					throw new Error('Invalid coordinates');
 				}
 				features = await this.mapboxService.searchByText(keyword, {
 					proximity: [lng, lat],
@@ -273,7 +273,7 @@ export class PlaceService {
 		} catch (error) {
 			const axiosError = error as AxiosError;
 			this.logger.error(`Search places API error: ${axiosError?.message || String(error)}`);
-			throw new Error('Không thể tìm kiếm địa điểm');
+throw new Error('Unable to search places');
 		}
 	}
 }

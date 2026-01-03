@@ -1,9 +1,21 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
+import { DataSource, Repository } from "typeorm";
 import { Friendship } from "./friendship.entity";
-import { Repository } from "typeorm";
 import { FriendshipStatus } from "./friendship-status.enum";
 import { User } from "src/user/entities/user.entity";
+
+// Error messages (English only)
+const ERROR_MESSAGES = {
+  CANNOT_SELF_FRIEND: 'Cannot send friend request to yourself',
+  REQUEST_ALREADY_EXISTS: 'Friend request already sent',
+  ALREADY_FRIENDS: 'Users are already friends',
+  REQUEST_NOT_FOUND: 'Friend request not found',
+  REQUEST_ALREADY_PROCESSED: 'Friend request already processed',
+  UNAUTHORIZED_ACCEPT: 'You do not have permission to accept this friend request',
+  UNAUTHORIZED_REJECT: 'You do not have permission to reject this friend request',
+  NOT_FRIENDS: 'Users are not friends',
+} as const;
 
 @Injectable()
 export class FriendshipService {
@@ -12,89 +24,115 @@ export class FriendshipService {
   constructor(
     @InjectRepository(Friendship)
     private friendshipRepo: Repository<Friendship>,
+    private dataSource: DataSource,
   ) {}
 
   /**
-   * Gửi lời mời kết bạn
+   * Send friend request with transaction
    */
   async sendRequest(fromId: string, toId: string): Promise<Friendship> {
     this.logger.log(`User ${fromId} sending friend request to ${toId}`);
 
-    // Validation: không thể tự kết bạn với mình
+    // Validation: cannot friend request self
     if (fromId === toId) {
       this.logger.warn(`User ${fromId} attempted to send request to self`);
-      throw new Error('Không thể tự gửi lời mời kết bạn với bản thân');
+      throw new Error(ERROR_MESSAGES.CANNOT_SELF_FRIEND);
     }
 
-    // Kiểm tra đã gửi request trước đó chưa
-    const existing = await this.friendshipRepo.findOne({
-      where: { requester: { id: fromId }, recipient: { id: toId } },
-      relations: ['requester', 'recipient'],
-    });
-    if (existing) {
-      this.logger.warn(`Request already exists from ${fromId} to ${toId}`);
-      throw new Error('Đã gửi lời mời');
-    }
+    // Use transaction for atomic operation
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
 
-    // Kiểm tra đã là bạn bè chưa
-    const alreadyFriends = await this.friendshipRepo.findOne({
-      where: [
-        { requester: { id: fromId }, recipient: { id: toId }, status: FriendshipStatus.ACCEPTED },
-        { requester: { id: toId }, recipient: { id: fromId }, status: FriendshipStatus.ACCEPTED },
-      ],
-    });
-    if (alreadyFriends) {
-      this.logger.warn(`Users ${fromId} and ${toId} are already friends`);
-      throw new Error('Hai người đã là bạn bè');
-    }
+    try {
+      // Check for existing request
+      const existing = await this.friendshipRepo.findOne({
+        where: { requester: { id: fromId }, recipient: { id: toId } },
+        relations: ['requester', 'recipient'],
+      });
+      if (existing) {
+        this.logger.warn(`Request already exists from ${fromId} to ${toId}`);
+        throw new Error(ERROR_MESSAGES.REQUEST_ALREADY_EXISTS);
+      }
 
-    const request = this.friendshipRepo.create({
-      requester: { id: fromId },
-      recipient: { id: toId },
-      status: FriendshipStatus.PENDING,
-    });
-    
-    const saved = await this.friendshipRepo.save(request);
-    this.logger.log(`Friend request sent: ${saved.id}`);
-    
-    return saved;
+      // Check if already friends
+      const alreadyFriends = await this.friendshipRepo.findOne({
+        where: [
+          { requester: { id: fromId }, recipient: { id: toId }, status: FriendshipStatus.ACCEPTED },
+          { requester: { id: toId }, recipient: { id: fromId }, status: FriendshipStatus.ACCEPTED },
+        ],
+      });
+      if (alreadyFriends) {
+        this.logger.warn(`Users ${fromId} and ${toId} are already friends`);
+        throw new Error(ERROR_MESSAGES.ALREADY_FRIENDS);
+      }
+
+      const request = this.friendshipRepo.create({
+        requester: { id: fromId },
+        recipient: { id: toId },
+        status: FriendshipStatus.PENDING,
+      });
+      
+      const saved = await queryRunner.manager.save(request);
+      await queryRunner.commitTransaction();
+      
+      this.logger.log(`Friend request sent: ${saved.id}`);
+      return saved;
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
   }
 
   /**
-   * Chấp nhận lời mời kết bạn
+   * Accept friend request with transaction
    */
   async acceptRequest(requestId: string, userId: string): Promise<Friendship> {
     this.logger.log(`User ${userId} accepting request ${requestId}`);
 
-    const request = await this.friendshipRepo.findOne({
-      where: { id: requestId },
-      relations: ['requester', 'recipient'],
-    });
-    if (!request) {
-      this.logger.warn(`Friend request not found: ${requestId}`);
-      throw new Error('Không tìm thấy lời mời');
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const request = await this.friendshipRepo.findOne({
+        where: { id: requestId },
+        relations: ['requester', 'recipient'],
+      });
+      if (!request) {
+        this.logger.warn(`Friend request not found: ${requestId}`);
+        throw new Error(ERROR_MESSAGES.REQUEST_NOT_FOUND);
+      }
+      
+      if (request.status !== FriendshipStatus.PENDING) {
+        this.logger.warn(`Request ${requestId} already processed with status: ${request.status}`);
+        throw new Error(ERROR_MESSAGES.REQUEST_ALREADY_PROCESSED);
+      }
+      
+      // Validation: only recipient can accept
+      if (request.recipient.id !== userId) {
+        this.logger.warn(`User ${userId} attempted to accept request ${requestId} not addressed to them`);
+        throw new Error(ERROR_MESSAGES.UNAUTHORIZED_ACCEPT);
+      }
+      
+      request.status = FriendshipStatus.ACCEPTED;
+      const saved = await queryRunner.manager.save(request);
+      await queryRunner.commitTransaction();
+      
+      this.logger.log(`Friend request ${requestId} accepted`);
+      return saved;
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
     }
-    
-    if (request.status !== FriendshipStatus.PENDING) {
-      this.logger.warn(`Request ${requestId} already processed with status: ${request.status}`);
-      throw new Error('Lời mời đã được xử lý');
-    }
-    
-    // Validation: chỉ recipient mới có thể chấp nhận
-    if (request.recipient.id !== userId) {
-      this.logger.warn(`User ${userId} attempted to accept request ${requestId} not addressed to them`);
-      throw new Error('Bạn không có quyền chấp nhận lời mời này');
-    }
-    
-    request.status = FriendshipStatus.ACCEPTED;
-    const saved = await this.friendshipRepo.save(request);
-    this.logger.log(`Friend request ${requestId} accepted`);
-    
-    return saved;
   }
 
   /**
-   * Từ chối lời mời kết bạn
+   * Reject friend request
    */
   async rejectRequest(requestId: string, userId: string): Promise<Friendship> {
     this.logger.log(`User ${userId} rejecting request ${requestId}`);
@@ -104,15 +142,15 @@ export class FriendshipService {
       relations: ['requester', 'recipient'],
     });
     if (!request) {
-      throw new Error('Không tìm thấy lời mời');
+      throw new Error(ERROR_MESSAGES.REQUEST_NOT_FOUND);
     }
     
     if (request.status !== FriendshipStatus.PENDING) {
-      throw new Error('Lời mời đã được xử lý');
+      throw new Error(ERROR_MESSAGES.REQUEST_ALREADY_PROCESSED);
     }
     
     if (request.recipient.id !== userId) {
-      throw new Error('Bạn không có quyền từ chối lời mời này');
+      throw new Error(ERROR_MESSAGES.UNAUTHORIZED_REJECT);
     }
     
     request.status = FriendshipStatus.REJECTED;
@@ -120,7 +158,7 @@ export class FriendshipService {
   }
 
   /**
-   * Hủy kết bạn
+   * Unfriend user
    */
   async unfriend(userId: string, friendId: string): Promise<Friendship> {
     this.logger.log(`User ${userId} unfriending ${friendId}`);
@@ -133,7 +171,7 @@ export class FriendshipService {
     });
     if (!relation) {
       this.logger.warn(`No friendship found between ${userId} and ${friendId}`);
-      throw new Error('Không phải bạn bè');
+      throw new Error(ERROR_MESSAGES.NOT_FRIENDS);
     }
     
     await this.friendshipRepo.remove(relation);
@@ -143,10 +181,13 @@ export class FriendshipService {
   }
 
   /**
-   * Lấy danh sách bạn bè
+   * Get user's friends with pagination
    */
-  async getFriends(userId: string): Promise<User[]> {
+  async getFriends(userId: string, page: number = 1, limit: number = 10): Promise<User[]> {
     this.logger.log(`Fetching friends for user: ${userId}`);
+
+    const validLimit = Math.min(limit, 100);
+    const skip = (page - 1) * validLimit;
 
     const accepted = await this.friendshipRepo.find({
       where: [
@@ -154,6 +195,8 @@ export class FriendshipService {
         { recipient: { id: userId }, status: FriendshipStatus.ACCEPTED },
       ],
       relations: ['requester', 'recipient'],
+      take: validLimit,
+      skip,
     });
 
     const friends = accepted.map(f =>
@@ -165,7 +208,7 @@ export class FriendshipService {
   }
 
   /**
-   * Lấy danh sách lời mời kết bạn đã nhận
+   * Get pending friend requests received
    */
   async getPendingRequests(userId: string): Promise<Friendship[]> {
     return this.friendshipRepo.find({
@@ -176,7 +219,7 @@ export class FriendshipService {
   }
 
   /**
-   * Kiểm tra trạng thái friendship giữa 2 user
+   * Check friendship status between 2 users
    */
   async getFriendshipStatus(userId1: string, userId2: string): Promise<FriendshipStatus | null> {
     const relation = await this.friendshipRepo.findOne({

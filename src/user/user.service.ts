@@ -44,9 +44,25 @@ export class UserService {
     return this.userRepo.save(user);
   }
 
-  async getAll(): Promise<User[]> {
-    this.logger.log('Fetching all users');
-    return this.userRepo.find();
+  async getAll(page: number = 1, limit: number = 10): Promise<{ users: User[]; total: number; page: number; lastPage: number }> {
+    this.logger.log(`Fetching users - page: ${page}, limit: ${limit}`);
+    
+    const validLimit = Math.min(Math.max(1, limit), 100);
+    const validPage = Math.max(1, page);
+    const skip = (validPage - 1) * validLimit;
+    
+    const [users, total] = await this.userRepo.findAndCount({
+      order: { createdAt: 'DESC' },
+      take: validLimit,
+      skip,
+    });
+
+    return {
+      users,
+      total,
+      page: validPage,
+      lastPage: Math.ceil(total / validLimit),
+    };
   }
 
   async delete(id: string): Promise<boolean> {

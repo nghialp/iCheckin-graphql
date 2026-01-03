@@ -1,8 +1,8 @@
-import { Module,  } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { GraphQLModule } from '@nestjs/graphql';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { UserModule } from './user/user.module';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
 import { CacheModule } from '@nestjs/cache-manager';
 import * as redisStore from 'cache-manager-redis-store';
@@ -27,10 +27,26 @@ import { CommonModule } from './common/common.module';
         ttl: 60, // thời gian cache mặc định (giây)
       }),
     }),
-    GraphQLModule.forRoot<ApolloDriverConfig>({
+    GraphQLModule.forRootAsync<ApolloDriverConfig>({
       driver: ApolloDriver,
-      autoSchemaFile: join(process.cwd(), 'src/schema.gql'),
-      playground: true,
+      imports: [ConfigModule],
+      useFactory: (configService: ConfigService) => ({
+        autoSchemaFile: join(process.cwd(), 'src/schema.gql'),
+        playground: configService.get('NODE_ENV') !== 'production', // Disable playground in production
+        introspection: configService.get('NODE_ENV') !== 'production',
+        formatError: (error) => {
+          // Sanitize error messages in production
+          const isProduction = configService.get('NODE_ENV') === 'production';
+          if (isProduction && !error.extensions?.code) {
+            return {
+              message: 'An error occurred',
+              extensions: { code: 'INTERNAL_SERVER_ERROR' },
+            };
+          }
+          return error;
+        },
+      }),
+      inject: [ConfigService],
     }),
     ConfigModule.forRoot({ isGlobal: true }),
     TypeOrmModule.forRoot({
@@ -41,7 +57,9 @@ import { CommonModule } from './common/common.module';
       password: process.env.DB_PASSWORD,
       database: process.env.DB_DATABASE,
       entities: [__dirname + '/**/*.entity{.ts,.js}'],
-      synchronize: true, // chỉ dùng cho dev
+      // Disable synchronize in production to prevent data loss
+      synchronize: process.env.NODE_ENV !== 'production',
+      logging: process.env.NODE_ENV !== 'production',
     }),
     UserModule,
     AuthModule,

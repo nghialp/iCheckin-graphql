@@ -1,9 +1,16 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
-import { Checkin } from "./checin.entity";
+import { Checkin } from "./checkin.entity";
 import { User } from "src/user/entities/user.entity";
 import { Place } from "src/place/place.entity";
+import { CONSTANTS } from "src/common/constants";
+
+// Error messages
+const ERROR_MESSAGES = {
+  CHECKIN_NOT_FOUND: 'Checkin not found',
+  UNAUTHORIZED_DELETE: 'You do not have permission to delete this checkin',
+} as const;
 
 @Injectable()
 export class CheckinService {
@@ -20,7 +27,7 @@ export class CheckinService {
     const checkin = this.checkinRepo.create({
       user,
       place,
-      status: status || 'checked_in',
+      status: status || CONSTANTS.CHECKIN_STATUS.CHECKED_IN,
       mood,
       checkedAt: new Date(),
     });
@@ -31,13 +38,19 @@ export class CheckinService {
     return saved;
   }
 
-  async getUserCheckins(userId: string): Promise<Checkin[]> {
+  async getUserCheckins(userId: string, page: number = CONSTANTS.PAGINATION.DEFAULT_PAGE, limit: number = CONSTANTS.PAGINATION.DEFAULT_LIMIT): Promise<Checkin[]> {
     this.logger.log(`Fetching checkins for user: ${userId}`);
+    
+    // Ensure limit doesn't exceed max
+    const validLimit = Math.min(limit, CONSTANTS.PAGINATION.MAX_LIMIT);
+    const skip = (page - 1) * validLimit;
     
     return this.checkinRepo.find({
       where: { user: { id: userId } },
       relations: ['place', 'user'],
       order: { checkedAt: 'DESC' },
+      take: validLimit,
+      skip,
     });
   }
 
@@ -58,12 +71,12 @@ export class CheckinService {
 
     if (!checkin) {
       this.logger.warn(`Checkin not found: ${id}`);
-      return false;
+      throw new Error(ERROR_MESSAGES.CHECKIN_NOT_FOUND);
     }
 
     if (checkin.user.id !== userId) {
       this.logger.warn(`User ${userId} attempted to delete checkin ${id} owned by ${checkin.user.id}`);
-      throw new Error('Bạn không có quyền xóa checkin này');
+      throw new Error(ERROR_MESSAGES.UNAUTHORIZED_DELETE);
     }
 
     await this.checkinRepo.remove(checkin);

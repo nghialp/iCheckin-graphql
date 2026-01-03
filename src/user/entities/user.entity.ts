@@ -1,14 +1,14 @@
 import { Field, ID, ObjectType } from "@nestjs/graphql";
-import { Checkin } from "../../checkin/checin.entity";
+import { Checkin } from "../../checkin/checkin.entity";
 import { Friendship } from "../../friendships/friendship.entity";
-import { Column, Entity, OneToMany, PrimaryGeneratedColumn } from "typeorm";
+import { Column, CreateDateColumn, DeleteDateColumn, Entity, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 import { Post } from "src/post/post.entity";
 
 @ObjectType()
 @Entity()
 export class User {
     @Field(() => ID)
-    @PrimaryGeneratedColumn('uuid') // dùng UUID thay vì số nguyên
+    @PrimaryGeneratedColumn('uuid')
     id: string;
 
     @Field()
@@ -19,7 +19,6 @@ export class User {
     @Column({ unique: true })
     email: string;
 
-    // Password - không expose qua GraphQL để bảo mật
     @Column()
     password: string;
 
@@ -35,7 +34,6 @@ export class User {
     @Column({ default: 1 })
     level: number;
 
-    // RefreshToken - không expose qua GraphQL để bảo mật
     @Column({ nullable: true })
     refreshToken?: string;
 
@@ -69,6 +67,18 @@ export class User {
 
     @OneToMany(() => Post, post => post.user)
     posts: Post[];
+
+    // Timestamps for tracking
+    @Field()
+    @CreateDateColumn()
+    createdAt: Date;
+
+    @Field()
+    @UpdateDateColumn()
+    updatedAt: Date;
+
+    // Soft delete support
+    @Field({ nullable: true })
+    @DeleteDateColumn()
+    deletedAt?: Date;
 }
-
-

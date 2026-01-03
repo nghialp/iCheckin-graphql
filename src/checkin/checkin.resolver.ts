@@ -1,5 +1,5 @@
-import { Resolver, Query, Args, Int, Mutation } from '@nestjs/graphql';
-import { Checkin } from './checin.entity';
+import { Resolver, Query, Args, Mutation } from '@nestjs/graphql';
+import { Checkin } from './checkin.entity';
 import { CheckinService } from './checkin.service';
 import { GqlAuthGuard } from 'src/auth/guards/gql-auth.guard';
 import { UseGuards } from '@nestjs/common';
@@ -21,18 +21,18 @@ export class CheckinResolver {
     async checkin(@Args('data') data: CreateCheckinInput, @CurrentUser() user: User) {
         let place;
 
-        // Ưu tiên sử dụng placeId nếu có
+        // Prioritize using placeId if available
         if (data.placeId) {
             place = await this.placeService.findOneBy({ id: data.placeId });
             if (!place) {
                 throw new Error('Place not found');
             }
         } 
-        // Nếu có mapboxId → tìm trong DB trước, nếu chưa có thì gọi Mapbox API và tạo mới
+        // If mapboxId is provided, search in DB first, otherwise call Mapbox API
         else if (data.mapboxId) {
             place = await this.placeService.findOrCreateFromMapboxId(data.mapboxId);
         } else {
-            throw new Error('Vui lòng cung cấp placeId hoặc mapboxId');
+            throw new Error('Please provide placeId or mapboxId');
         }
 
         return this.checkinService.createCheckin(user, place, data.status, data.mood);

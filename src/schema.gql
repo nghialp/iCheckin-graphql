@@ -87,6 +87,9 @@ type User {
   country: String
   interests: [String!]
   privacy_settings: String
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  deletedAt: DateTime
 }
 
 type AuthResponse {
