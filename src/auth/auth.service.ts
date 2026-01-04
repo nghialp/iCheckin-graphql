@@ -1,4 +1,4 @@
-import { Injectable, Logger } from "@nestjs/common";
+import { Injectable, Logger, BadRequestException } from "@nestjs/common";
 import { AuthResponse } from "./dto/auth.response";
 import { SignupInput } from "./dto/signup.input";
 import { LoginInput } from "./dto/login.input";
@@ -16,7 +16,8 @@ const SALT_ROUNDS = CONSTANTS.PASSWORD.SALT_ROUNDS;
 // Custom error messages (English only)
 const ERROR_MESSAGES = {
   EMAIL_EXISTS: 'Email already exists',
-  INVALID_CREDENTIALS: 'Invalid email or password',
+  INCORRECT_PASSWORD: 'Password is incorrect',
+  EMAIL_NOT_REGISTER: 'Email is not registered',
   USER_NOT_FOUND: 'User not found',
   INVALID_TOKEN: 'Invalid or expired token',
   TOKEN_MISMATCH: 'Token mismatch',
@@ -80,7 +81,10 @@ export class AuthService {
     const existing = await this.userService.findByEmail(input.email);
     if (existing) {
       this.logger.warn(`Signup failed - email already exists: ${maskedEmail}`);
-      throw new Error(ERROR_MESSAGES.EMAIL_EXISTS);
+      throw new BadRequestException([{
+        field: 'email',
+        message: ERROR_MESSAGES.EMAIL_EXISTS
+      }]);
     }
 
     const hashed = await bcrypt.hash(input.password, SALT_ROUNDS);
@@ -99,9 +103,19 @@ export class AuthService {
     this.logger.log(`Login attempt for user: ${maskedEmail}`);
     
     const user = await this.userService.findByEmail(input.email);
-    if (!user || !(await bcrypt.compare(input.password, user.password))) {
+    if (!user) {
+      this.logger.warn(`Login failed - email not registered: ${maskedEmail}`);
+      throw new BadRequestException([{
+        field: 'email',
+        message: ERROR_MESSAGES.EMAIL_NOT_REGISTER
+      }]);
+    }
+    if (!(await bcrypt.compare(input.password, user.password))) {
       this.logger.warn(`Login failed - invalid credentials for: ${maskedEmail}`);
-      throw new Error(ERROR_MESSAGES.INVALID_CREDENTIALS);
+      throw new BadRequestException([{
+        field: 'password',
+        message: ERROR_MESSAGES.INCORRECT_PASSWORD
+      }]);
     }
 
     const { accessToken, refreshToken } = await this.generateTokens(user);
@@ -148,19 +162,28 @@ export class AuthService {
       payload = this.jwtService.verify(refreshToken);
     } catch (error) {
       this.logger.warn('Refresh token verification failed');
-      throw new Error(ERROR_MESSAGES.INVALID_TOKEN);
+      throw new BadRequestException([{
+        field: 'refreshToken',
+        message: ERROR_MESSAGES.INVALID_TOKEN
+      }]);
     }
 
     const user = await this.userService.findById(payload.sub);
     if (!user || !user.refreshToken) {
       this.logger.warn('Refresh token user not found');
-      throw new Error(ERROR_MESSAGES.USER_NOT_FOUND);
+      throw new BadRequestException([{
+        field: 'refreshToken',
+        message: ERROR_MESSAGES.USER_NOT_FOUND
+      }]);
     }
 
     const isMatch = await bcrypt.compare(refreshToken, user.refreshToken);
     if (!isMatch) {
       this.logger.warn('Refresh token mismatch');
-      throw new Error(ERROR_MESSAGES.TOKEN_MISMATCH);
+      throw new BadRequestException([{
+        field: 'refreshToken',
+        message: ERROR_MESSAGES.TOKEN_MISMATCH
+      }]);
     }
     
     const newAccessToken = this.jwtService.sign(
@@ -174,7 +197,10 @@ export class AuthService {
 
   async resetPassword(email: string, newPassword: string): Promise<void> {
     const user = await this.userService.findByEmail(email);
-    if (!user) throw new Error(ERROR_MESSAGES.USER_NOT_FOUND);
+    if (!user) throw new BadRequestException([{
+      field: 'email',
+      message: ERROR_MESSAGES.USER_NOT_FOUND
+    }]);
 
     const hashed = await bcrypt.hash(newPassword, SALT_ROUNDS);
     await this.userService.update(user.id, { password: hashed });
@@ -184,10 +210,16 @@ export class AuthService {
 
   async changePassword(userId: string, currentPassword: string, newPassword: string): Promise<void> {
     const user = await this.userService.findById(userId);
-    if (!user) throw new Error(ERROR_MESSAGES.USER_NOT_FOUND);
+    if (!user) throw new BadRequestException([{
+      field: 'user',
+      message: ERROR_MESSAGES.USER_NOT_FOUND
+    }]);
 
     const isMatch = await bcrypt.compare(currentPassword, user.password);
-    if (!isMatch) throw new Error('Current password is incorrect');
+    if (!isMatch) throw new BadRequestException([{
+      field: 'currentPassword',
+      message: 'Current password is incorrect'
+    }]);
 
     const hashed = await bcrypt.hash(newPassword, SALT_ROUNDS);
     await this.userService.update(user.id, { password: hashed });
@@ -197,13 +229,19 @@ export class AuthService {
 
   async forgetPassword(email: string): Promise<void> {
     const user = await this.userService.findByEmail(email);
-    if (!user) throw new Error(ERROR_MESSAGES.USER_NOT_FOUND);
+    if (!user) throw new BadRequestException([{
+      field: 'email',
+      message: ERROR_MESSAGES.USER_NOT_FOUND
+    }]);
     
     try {
       await this.sendResetPasswordEmail(user);
     } catch (error) {
       this.logger.error(`Failed to send reset password email to: ${email}`, error);
-      throw new Error(ERROR_MESSAGES.PASSWORD_RESET_FAILED);
+      throw new BadRequestException([{
+        field: 'email',
+        message: ERROR_MESSAGES.PASSWORD_RESET_FAILED
+      }]);
     }
   }
 
