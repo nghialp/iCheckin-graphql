@@ -37,16 +37,6 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
 
-      - name: Build Docker image (for tests)
-        uses: docker/build-push-action@v4
-        with:
-          context: .
-          file: ./Dockerfile
-          push: false
-          load: true
-          tags: |
-            checkin-backend-test:${{ github.sha }}
-
       - name: Validate deploy credentials
         run: |
           if [ -z "${{ secrets.DEPLOY_SSH_KEY }}" ]; then
@@ -60,6 +50,49 @@ jobs:
           echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Check for migration changes
+        id: migration-changed
+        uses: trilom/file-changes-action@v1.2.4
+        with:
+          output: 'json'
+          fileOutput: 'json'
+
+      - name: Install dependencies
+        run: |
+          npm install -g pnpm
+          pnpm install
+
+      - name: Build project
+        run: pnpm build
+
+      - name: Run database migrations on server (if migration files changed)
+        if: steps.migration-changed.outputs.files_changed != ''
+        run: |
+          echo "🔄 Migration files detected, running migrations on server..."
+          ssh -i ~/.ssh/id_rsa -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'EOF'
+            set -euo pipefail
+            DEPLOY_PATH="${{ secrets.DEPLOY_PATH }}"
+            
+            cd "$DEPLOY_PATH"
+            
+            # Install dependencies if not exists
+            if [ ! -d "node_modules" ]; then
+              npm install -g pnpm
+              pnpm install --prod
+            fi
+            
+            # Install TypeScript and required dependencies for migration
+            pnpm install typescript ts-node -g
+            
+            # Run migrations
+            echo "🚀 Running database migrations..."
+            pnpm migration:run || {
+              echo "❌ Migration failed!"
+              exit 1
+            }
+            echo "✅ Migrations completed successfully!"
+          EOF
 
       - name: Deploy to server
         run: |

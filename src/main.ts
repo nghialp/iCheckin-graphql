@@ -5,7 +5,7 @@ import {
   NestFastifyApplication,
 } from '@nestjs/platform-fastify';
 import cors from '@fastify/cors';
-import { ValidationPipe, Logger } from '@nestjs/common';
+import { ValidationPipe, Logger, BadRequestException } from '@nestjs/common';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
@@ -25,6 +25,14 @@ async function bootstrap() {
       transformOptions: {
         enableImplicitConversion: true,
       },
+      exceptionFactory: (errors) => {
+      return new BadRequestException(
+        errors.map(err => ({
+          field: err.property,
+          message: Object.values(err.constraints || {}).join(', ')
+        }))
+      );
+    },
     }),
   );
 

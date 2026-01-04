@@ -28,7 +28,7 @@ COPY --from=builder /app/ormconfig.json ./
 
 EXPOSE 3000
 
-# Run migration before starting the app
-RUN npm run migration:run
+# Note: Migrations are handled in CI/CD workflow when migration files change
+# Run: npm run migration:run
 
 CMD ["pnpm", "start:prod"]
