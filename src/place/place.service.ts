@@ -45,12 +45,6 @@ export class PlaceService {
 			this.logger.debug(`Cache hit for place: ${mapboxId}`);
 			const cachedData = JSON.parse(cached);
 			return cachedData;
-			// const existingPlace = await this.placeRepo.findOne({
-			// 	where: { mapboxId },
-			// });
-			// if (existingPlace) {
-			// 	return existingPlace;
-			// }
 		}
 
 		// 2. Find in database
@@ -76,7 +70,7 @@ export class PlaceService {
 
 		// 3. If not found → call Mapbox Places API
 		this.logger.log(`Fetching from Mapbox API: ${mapboxId}`);
-		
+
 		try {
 			const placeData = await this.mapboxService.getPlaceDetails(mapboxId);
 
@@ -108,7 +102,7 @@ export class PlaceService {
 		} catch (error) {
 			const axiosError = error as AxiosError;
 			this.logger.error(`Failed to fetch place details: ${axiosError?.message || String(error)}`);
-throw new Error('Unable to fetch place details from Mapbox');
+			throw new Error('Unable to fetch place details from Mapbox');
 		}
 	}
 
@@ -118,8 +112,8 @@ throw new Error('Unable to fetch place details from Mapbox');
 		return this.placeRepo.save(place);
 	}
 
-	async findOneBy(options: Omit<Partial<Place>, 'coordinates' | 'types' | 'thumbnail'>): Promise<Place | null> {
-		return this.placeRepo.findOneBy(options);
+	async findOneBy(options: Omit<Partial<Place>, 'coordinates' | 'types' | 'thumbnail' | 'trips' | 'checkins'>): Promise<Place | null> {
+		return this.placeRepo.findOneBy(options as any);
 	}
 
 	async findNearestPlaces(keyword: string, lat: number, lng: number): Promise<Place[]> {
@@ -168,7 +162,7 @@ throw new Error('Unable to fetch place details from Mapbox');
 		// Validate coordinates
 		if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
 			this.logger.warn(`Invalid coordinates: (${lat}, ${lng})`);
-throw new Error('Invalid coordinates');
+			throw new Error('Invalid coordinates');
 		}
 
 		try {
@@ -190,7 +184,7 @@ throw new Error('Invalid coordinates');
 
 		// Validate input
 		if (radius <= 0 || radius > 50000) {
-throw new Error('Search radius must be between 1 and 50000 meters');
+			throw new Error('Search radius must be between 1 and 50000 meters');
 		}
 
 		const cacheKey = `place:nearby:${lat},${lng}:${radius}`;
@@ -204,8 +198,8 @@ throw new Error('Search radius must be between 1 and 50000 meters');
 
 		try {
 			const features = await this.mapboxService.searchNearby(lng, lat, radius);
-			
-			const results = features.map((feature) => 
+
+			const results = features.map((feature) =>
 				this.mapboxService.transformToSearchPlace(feature)
 			);
 
@@ -216,7 +210,7 @@ throw new Error('Search radius must be between 1 and 50000 meters');
 		} catch (error) {
 			const axiosError = error as AxiosError;
 			this.logger.error(`Nearby places API error: ${axiosError?.message || String(error)}`);
-throw new Error('Unable to search nearby places');
+			throw new Error('Unable to search nearby places');
 		}
 	}
 
@@ -232,7 +226,7 @@ throw new Error('Unable to search nearby places');
 		this.logger.log(`Searching places with keyword: "${keyword}" at (${lat}, ${lng})`);
 
 		if (!keyword || keyword.trim().length === 0) {
-throw new Error('Search keyword cannot be empty');
+			throw new Error('Search keyword cannot be empty');
 		}
 
 		// Create cache key
@@ -249,7 +243,7 @@ throw new Error('Search keyword cannot be empty');
 			// If coordinates provided, search with proximity
 			let features;
 			if (lat !== undefined && lng !== undefined) {
-if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+				if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
 					throw new Error('Invalid coordinates');
 				}
 				features = await this.mapboxService.searchByText(keyword, {
@@ -262,7 +256,7 @@ if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
 				});
 			}
 
-			const results = features.map((feature) => 
+			const results = features.map((feature) =>
 				this.mapboxService.transformToSearchPlace(feature)
 			);
 
@@ -273,7 +267,7 @@ if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
 		} catch (error) {
 			const axiosError = error as AxiosError;
 			this.logger.error(`Search places API error: ${axiosError?.message || String(error)}`);
-throw new Error('Unable to search places');
+			throw new Error('Unable to search places');
 		}
 	}
 }

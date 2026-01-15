@@ -1,6 +1,7 @@
 import { Field, Float, ID, ObjectType } from '@nestjs/graphql';
-import { Column, Entity, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
+import { Column, Entity, OneToMany, PrimaryGeneratedColumn, ManyToMany, JoinTable } from 'typeorm';
 import { Checkin } from 'src/checkin/checkin.entity';
+import { Trip } from 'src/trip/trip.entity';
 
 @ObjectType()
 @Entity()
@@ -43,4 +44,13 @@ export class Place {
 
   @OneToMany(() => Checkin, checkin => checkin.place)
   checkins: Checkin[];
+
+  @ManyToMany(() => Trip, trip => trip.places)
+  @JoinTable({
+    name: 'trip_places',
+    joinColumn: { name: 'place_id', referencedColumnName: 'id' },
+    inverseJoinColumn: { name: 'trip_id', referencedColumnName: 'id' },
+  })
+  @Field(() => [Trip], { nullable: true })
+  trips?: Trip[];
 }

@@ -1,9 +1,10 @@
 import { ObjectType, Field, ID } from '@nestjs/graphql';
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany, JoinColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany, JoinColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
 import { User } from '../user/entities/user.entity';
 import { Media } from 'src/media/media.entity';
 import { Place } from 'src/place/place.entity';
 import { Comment } from 'src/comment/comment.entity';
+import { Trip } from 'src/trip/trip.entity';
 
 @ObjectType()
 @Entity()
@@ -21,6 +22,11 @@ export class Post {
     @JoinColumn({ name: 'place_id' })
     @Field(() => Place, { nullable: true })
     place?: Place;
+
+    @ManyToOne(() => Trip, trip => trip.posts, { nullable: true })
+    @JoinColumn({ name: 'trip_id' })
+    @Field(() => Trip, { nullable: true })
+    trip?: Trip;
 
     @Field()
     @Column()
@@ -46,6 +52,10 @@ export class Post {
     comments: Comment[];
 
     @Field()
-    @Column({ type: 'timestamp' })
+    @CreateDateColumn()
     createdAt: Date;
+
+    @Field()
+    @UpdateDateColumn()
+    updatedAt: Date;
 }

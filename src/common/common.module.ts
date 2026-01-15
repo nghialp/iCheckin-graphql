@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { RateLimitMiddleware } from './middleware/rate-limit.middleware';
 import { MapboxPlacesService } from './services/mapbox-places.service';
-import { MapboxProxyController } from './services/mapbox-proxy.controller';
+import { MapboxProxyController } from './controllers/mapbox-proxy.controller';
 import { CacheModule } from '@nestjs/cache-manager';
 import { ConfigModule } from '@nestjs/config';
 

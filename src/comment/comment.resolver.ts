@@ -15,11 +15,13 @@ export class CommentResolver {
     ) { }
 
     @Query(() => [Comment])
+    @UseGuards(GqlAuthGuard)
     async getPostComments(@Args('postId') postId: string): Promise<Comment[]> {
         return this.commentService.getPostComments(postId);
     }
 
     @Query(() => Comment, { nullable: true })
+    @UseGuards(GqlAuthGuard)
     async getComment(@Args('id') id: string): Promise<Comment | null> {
         return this.commentService.getCommentById(id);
     }

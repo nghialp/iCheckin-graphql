@@ -1,8 +1,13 @@
 import { Field, ID, ObjectType } from "@nestjs/graphql";
 import { Checkin } from "../../checkin/checkin.entity";
 import { Friendship } from "../../friendships/friendship.entity";
-import { Column, CreateDateColumn, DeleteDateColumn, Entity, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
+import { Column, CreateDateColumn, DeleteDateColumn, Entity, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn, ManyToMany, JoinTable } from "typeorm";
 import { Post } from "src/post/post.entity";
+import { Trip } from "src/trip/trip.entity";
+import { TripCollaborator } from "src/trip/trip-collaborator.entity";
+import { Like } from "src/friendships/like.entity";
+import { CheckinFavorite } from "src/friendships/checkin-favorite.entity";
+import { PlaceFavorite } from "src/friendships/place-favorite.entity";
 
 @ObjectType()
 @Entity()
@@ -31,8 +36,12 @@ export class User {
     points: number;
 
     @Field()
-    @Column({ default: 1 })
-    level: number;
+    @Column({ default: 0 })
+    points_balance: number;
+
+    @Field()
+    @Column({ default: 'BRONZE' })
+    level: string; // BRONZE, SILVER, GOLD, PLATINUM
 
     @Column({ nullable: true })
     refreshToken?: string;
@@ -67,6 +76,39 @@ export class User {
 
     @OneToMany(() => Post, post => post.user)
     posts: Post[];
+
+    @Field(() => [Trip], { nullable: true })
+    @OneToMany(() => Trip, trip => trip.user)
+    trips: Trip[];
+
+    @Field(() => [TripCollaborator], { nullable: true })
+    @OneToMany(() => TripCollaborator, collaborator => collaborator.user)
+    tripCollaborations: TripCollaborator[];
+
+    @Field(() => [User], { nullable: true })
+    @ManyToMany(() => User, user => user.followings)
+    @JoinTable({
+      name: 'user_followers',
+      joinColumn: { name: 'follower_id', referencedColumnName: 'id' },
+      inverseJoinColumn: { name: 'following_id', referencedColumnName: 'id' },
+    })
+    followers?: User[];
+
+    @Field(() => [User], { nullable: true })
+    @ManyToMany(() => User, user => user.followers)
+    followings?: User[];
+
+    @OneToMany(() => Like, like => like.user)
+    @Field(() => [Like], { nullable: true })
+    likes?: Like[];
+
+    @OneToMany(() => CheckinFavorite, favorite => favorite.user)
+    @Field(() => [CheckinFavorite], { nullable: true })
+    favoriteCheckins?: CheckinFavorite[];
+
+    @OneToMany(() => PlaceFavorite, favorite => favorite.user)
+    @Field(() => [PlaceFavorite], { nullable: true })
+    favoritePlaces?: PlaceFavorite[];
 
     // Timestamps for tracking
     @Field()

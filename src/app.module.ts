@@ -14,6 +14,12 @@ import { MailModule } from './mail/mail.module';
 import { CommentModule } from './comment/comment.module';
 import { PlaceModule } from './place/place.module';
 import { PostModule } from './post/post.module';
+import { MediaModule } from './media/media.module';
+import { RewardModule } from './reward/reward.module';
+import { UsefulVoteModule } from './usefulvote/usefulvote.module';
+import { TripModule } from './trip/trip.module';
+import { PointLedgerModule } from './pointledger/pointledger.module';
+import { VoucherModule } from './voucher/voucher.module';
 import { CommonModule } from './common/common.module';
 
 @Module({
@@ -48,7 +54,7 @@ import { CommonModule } from './common/common.module';
       }),
       inject: [ConfigService],
     }),
-    ConfigModule.forRoot({ isGlobal: true }),
+    ConfigModule.forRoot({ isGlobal: true, envFilePath: '.env' }),
     TypeOrmModule.forRoot({
       type: 'postgres',
       host: process.env.DB_HOST,
@@ -68,6 +74,12 @@ import { CommonModule } from './common/common.module';
     CommentModule,
     PlaceModule,
     PostModule,
+    MediaModule,
+    RewardModule,
+    UsefulVoteModule,
+    TripModule,
+    PointLedgerModule,
+    VoucherModule,
     MailModule,
     CommonModule,
   ],

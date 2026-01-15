@@ -2,47 +2,6 @@
 # THIS FILE WAS AUTOMATICALLY GENERATED (DO NOT MODIFY)
 # ------------------------------------------------------
 
-type Place {
-  id: ID!
-  name: String!
-  address: String
-  types: [String!]
-  rating: Float
-  thumbnail: String
-  mapboxId: String
-  lat: Float!
-  lng: Float!
-}
-
-type Checkin {
-  id: ID!
-  user: User!
-  place: Place!
-  checkedAt: DateTime!
-  status: String!
-  mood: String
-}
-
-"""
-A date-time string at UTC, such as 2019-12-03T09:54:33Z, compliant with the date-time format.
-"""
-scalar DateTime
-
-type Friendship {
-  id: ID!
-  requester: User!
-  recipient: User!
-  status: FriendshipStatus!
-  createdAt: DateTime!
-}
-
-"""Trạng thái quan hệ bạn bè"""
-enum FriendshipStatus {
-  PENDING
-  ACCEPTED
-  REJECTED
-}
-
 type Media {
   id: ID!
   post: Post!
@@ -61,15 +20,140 @@ type Comment {
   parent_id: String
 }
 
+"""
+A date-time string at UTC, such as 2019-12-03T09:54:33Z, compliant with the date-time format.
+"""
+scalar DateTime
+
 type Post {
   id: ID!
   user: User!
   place: Place
+  trip: Trip
   content: String!
   tags: [String!]
   cost: Float
   rating: Float
   media: [Media!]
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+type TripCollaborator {
+  id: ID!
+  trip: Trip!
+  user: User!
+  role: String!
+  invitedBy: String
+  isAccepted: Boolean!
+  invitedAt: DateTime!
+  acceptedAt: DateTime
+  updatedAt: DateTime!
+}
+
+type TripItinerary {
+  id: ID!
+  trip: Trip!
+  dayNumber: Float!
+  date: DateTime!
+  title: String
+  description: String
+  activities: [ItineraryActivity!]
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+type ItineraryActivity {
+  id: ID!
+  itinerary: TripItinerary!
+  title: String!
+  description: String
+  startTime: String!
+  endTime: String!
+  location: String
+  placeId: String
+  category: String
+  notes: String
+  estimatedCost: Float
+  isCompleted: Boolean
+  priority: Float
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+type Trip {
+  id: ID!
+  user: User!
+  title: String!
+  description: String
+  start_date: DateTime!
+  end_date: DateTime!
+  locations: [String!]
+  places: [Place!]
+  status: String
+  posts: [Post!]
+  collaborators: [TripCollaborator!]
+  itineraries: [TripItinerary!]
+  checkin_list: [String!]
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+type Place {
+  id: ID!
+  name: String!
+  address: String
+  types: [String!]
+  rating: Float
+  thumbnail: String
+  mapboxId: String
+  lat: Float!
+  lng: Float!
+  trips: [Trip!]
+}
+
+type Checkin {
+  id: ID!
+  user: User!
+  place: Place!
+  checkedAt: DateTime!
+  status: String!
+  mood: String
+}
+
+type Friendship {
+  id: ID!
+  requester: User!
+  recipient: User!
+  status: FriendshipStatus!
+  createdAt: DateTime!
+}
+
+"""Trạng thái quan hệ bạn bè"""
+enum FriendshipStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+type Like {
+  id: ID!
+  user: User!
+  post: Post!
+  createdAt: DateTime!
+}
+
+type CheckinFavorite {
+  id: ID!
+  user: User!
+  checkin: Checkin!
+  createdAt: DateTime!
+}
+
+type PlaceFavorite {
+  id: ID!
+  user: User!
+  place: Place!
   createdAt: DateTime!
 }
 
@@ -79,7 +163,8 @@ type User {
   email: String!
   avatar: String
   points: Float!
-  level: Float!
+  points_balance: Float!
+  level: String!
   sentFriendRequests: [Friendship!]!
   checkins: [Checkin!]!
   receivedFriendRequests: [Friendship!]!
@@ -87,6 +172,13 @@ type User {
   country: String
   interests: [String!]
   privacy_settings: String
+  trips: [Trip!]
+  tripCollaborations: [TripCollaborator!]
+  followers: [User!]
+  followings: [User!]
+  likes: [Like!]
+  favoriteCheckins: [CheckinFavorite!]
+  favoritePlaces: [PlaceFavorite!]
   createdAt: DateTime!
   updatedAt: DateTime!
   deletedAt: DateTime
@@ -109,11 +201,235 @@ type SearchPlace {
   thumbnail: String
 }
 
+type Voucher {
+  id: ID!
+  reward: Reward!
+  user: User!
+  voucher_code: String!
+  qr_code: String!
+  redeem_date: DateTime!
+  expiry_date: DateTime
+  status: String!
+  used_date: DateTime
+  note: String
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+type Reward {
+  id: ID!
+  title: String!
+  description: String!
+  category: String!
+  points_required: Float!
+  stock: Float!
+  expiry_date: DateTime
+  partner_id: String
+  image_url: String!
+  status: String!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+type PointLedger {
+  transaction_id: ID!
+  user: User!
+  action_type: String!
+  points_change: Float!
+  balance_after: Float!
+  location: Place
+  reward: Reward
+  voucher: Voucher
+  note: String
+  timestamp: DateTime!
+}
+
+type PointTransactionResponse {
+  transaction_id: String!
+  action_type: String!
+  points_change: Float!
+  balance_after: Float!
+  user: User!
+  note: String
+  timestamp: DateTime!
+}
+
+type PointsSummaryResponse {
+  userId: String!
+  currentPoints: Float!
+  currentLevel: String!
+  totalTransactions: Float!
+  totalVouchers: Float!
+  unusedVouchers: Float!
+  nextLevelThreshold: Float!
+  pointsToNextLevel: Float!
+}
+
+type RedeemRewardResponse {
+  success: Boolean!
+  message: String!
+  voucher: Voucher
+}
+
+type RedemptionEligibility {
+  eligible: Boolean!
+  reason: String
+  pointsNeeded: Int
+}
+
+type RewardStats {
+  total: Int!
+  available: Int!
+  outOfStock: Int!
+  expired: Int!
+}
+
+type VoucherDetailsResponse {
+  id: String!
+  voucher_code: String!
+  qr_code: String!
+  reward: Reward!
+  user: User!
+  status: String!
+  redeem_date: DateTime!
+  used_date: DateTime
+  expiry_date: DateTime
+}
+
+type UsefulVote {
+  id: ID!
+  post: Post!
+  user: User!
+  timestamp: DateTime!
+}
+
+type VoteStats {
+  totalVotes: Int!
+  postsWithVotes: Int!
+}
+
+type PostVoteData {
+  post: Post!
+  voteCount: Int!
+}
+
+type UserVoteData {
+  user: User!
+  voteCount: Int!
+}
+
+type TripResponse {
+  id: ID!
+  user: User!
+  title: String!
+  description: String
+  start_date: DateTime!
+  end_date: DateTime!
+  locations: [String!]
+  status: String
+  posts: [Post!]
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+type TripStatsResponse {
+  tripId: ID!
+  title: String!
+  postsCount: Float!
+  locationsCount: Float!
+  durationDays: Float!
+  averageCost: Float!
+  averageRating: Float!
+}
+
+type TripPaginatedResponse {
+  trips: [TripResponse!]!
+  total: Float!
+  page: Float!
+  limit: Float!
+  totalPages: Float!
+}
+
+type PlaceStatsResponse {
+  totalPlaces: Float!
+  avgRating: Float!
+  types: [String!]!
+}
+
+type CollaboratorResponse {
+  id: ID!
+  trip: Trip!
+  user: User!
+  role: String!
+  invitedBy: String
+  isAccepted: Boolean!
+  invitedAt: DateTime!
+  acceptedAt: DateTime
+  updatedAt: DateTime!
+}
+
+type CollaboratorsListResponse {
+  collaborators: [CollaboratorResponse!]!
+  total: Float!
+}
+
+type ItineraryActivityResponse {
+  id: ID!
+  title: String!
+  description: String
+  startTime: String!
+  endTime: String!
+  location: String
+  placeId: String
+  category: String
+  notes: String
+  estimatedCost: Float
+  isCompleted: Boolean!
+  priority: Float
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+type ItineraryResponse {
+  id: ID!
+  dayNumber: Float!
+  date: DateTime!
+  title: String
+  description: String
+  activities: [ItineraryActivityResponse!]
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+type ItineraryStatsResponse {
+  dayNumber: Float!
+  date: DateTime!
+  totalActivities: Float!
+  completedActivities: Float!
+  totalEstimatedCost: Float!
+  firstActivityTime: String!
+  lastActivityTime: String!
+  categories: [String!]!
+  scheduleUtilization: Float!
+}
+
 type Query {
   getUsers: [User!]!
   getUser(id: String!): User!
   getProfile: User!
   myFriends: [User!]!
+  getFollowers(userId: String!): [User!]!
+  getFollowings(userId: String!): [User!]!
+  isFollowing(userId: String!): Boolean!
+  getPostLikes(postId: String!): [Like!]!
+  hasUserLikedPost(postId: String!): Boolean!
+  getPostLikeCount(postId: String!): Float!
+  getUserLikedPosts(userId: String!): [Post!]!
+  getUserFavoriteCheckins(userId: String!): [Checkin!]!
+  isCheckinFavorited(checkinId: String!): Boolean!
+  getUserFavoritePlaces(userId: String!): [Place!]!
+  isPlaceFavorited(placeId: String!): Boolean!
+  getPlaceFavoriteCount(placeId: String!): Float!
   myCheckins: [Checkin!]!
   nearestPlaces(lat: Float!, lng: Float!): [Place!]!
   searchPlaces(keyword: String!, lat: Float!, lng: Float!): [SearchPlace!]!
@@ -121,6 +437,88 @@ type Query {
   getPostComments(postId: String!): [Comment!]!
   getComment(id: String!): Comment
   getPost(id: String!): Post
+  media(id: ID!): Media
+  postMedia(postId: ID!): [Media!]!
+  mediaCount(postId: ID!): Int!
+  rewards(limit: Int! = 100, offset: Int! = 0): [Reward!]!
+  rewardCount: Int!
+  reward(id: ID!): Reward
+  availableRewards: [Reward!]!
+  rewardsByCategory(category: String!): [Reward!]!
+  getRewardStats: RewardStats!
+  getUserVouchers(status: String): [VoucherDetailsResponse!]!
+  checkRedemptionEligibility(rewardId: ID!): RedemptionEligibility!
+  getPointsSummary: PointsSummaryResponse!
+  getTransactionHistory(limit: Float! = 50, offset: Float! = 0): [PointLedger!]!
+  getPointsRules: [String!]!
+  getUserCurrentPoints: Float!
+  getUserCurrentLevel: String!
+  postVoteCount(postId: ID!): Int!
+  hasUserVoted(postId: ID!): Boolean!
+  postVotes(postId: ID!, limit: Int! = 50, offset: Int! = 0): [UsefulVote!]!
+  userVotes(userId: ID!, limit: Int! = 50, offset: Int! = 0): [UsefulVote!]!
+  userVoteCount(userId: ID!): Int!
+  mostVotedPosts(limit: Int! = 10): [PostVoteData!]!
+  mostHelpfulUsers(limit: Int! = 10): [UserVoteData!]!
+  userPostsVoteStats(userId: ID!): VoteStats!
+  myPostsVoteStats: VoteStats!
+
+  """Get a trip by ID"""
+  tripById(id: ID!): TripResponse!
+
+  """Get all trips for authenticated user"""
+  myTrips(page: ID, limit: ID): TripPaginatedResponse!
+
+  """Get upcoming trips for authenticated user"""
+  upcomingTrips(limit: ID): [TripResponse!]!
+
+  """Get past trips for authenticated user"""
+  pastTrips(limit: ID): [TripResponse!]!
+
+  """Get trips by specific month"""
+  tripsByMonth(month: ID!, year: ID!): [TripResponse!]!
+
+  """Get all posts associated with a trip"""
+  tripPosts(tripId: ID!): [Post!]!
+
+  """Get statistics for a trip"""
+  tripStats(tripId: ID!): TripStatsResponse!
+
+  """Get all places in a trip"""
+  tripPlaces(tripId: ID!): [Place!]!
+
+  """Get all trips that contain a specific place"""
+  placeTrips(placeId: ID!): [Trip!]!
+
+  """Get statistics about places in a trip"""
+  tripPlacesStats(tripId: ID!): PlaceStatsResponse!
+
+  """Get all collaborators for a trip"""
+  tripCollaborators(tripId: ID!): CollaboratorsListResponse!
+
+  """Get pending invitations for a trip"""
+  tripPendingInvitations(tripId: ID!): [CollaboratorResponse!]!
+
+  """Get all collaboration invitations for authenticated user"""
+  myInvitations: [CollaboratorResponse!]!
+
+  """Get all trips shared with authenticated user"""
+  sharedTrips: [TripResponse!]!
+
+  """Get all itineraries for a trip (sorted by day)"""
+  tripItineraries(tripId: ID!): [ItineraryResponse!]!
+
+  """Get itinerary for a specific day"""
+  itineraryByDay(tripId: ID!, dayNumber: Float!): ItineraryResponse!
+
+  """Get all activities for an itinerary (sorted by time)"""
+  itineraryActivities(itineraryId: ID!): [ItineraryActivityResponse!]!
+
+  """Get statistics for a specific itinerary"""
+  itineraryStats(itineraryId: ID!): ItineraryStatsResponse!
+
+  """Get statistics for all itineraries in a trip"""
+  tripItineraryStats(tripId: ID!): [ItineraryStatsResponse!]!
 }
 
 type Mutation {
@@ -133,12 +531,96 @@ type Mutation {
   sendFriendRequest(toUserId: String!): Friendship!
   acceptFriendRequest(requestId: String!): Friendship!
   unfriend(friendId: String!): Boolean!
+  followUser(userId: String!): User!
+  unfollowUser(userId: String!): Boolean!
+  likePost(postId: String!): Like!
+  unlikePost(postId: String!): Boolean!
+  addCheckinFavorite(checkinId: String!): CheckinFavorite!
+  removeCheckinFavorite(checkinId: String!): Boolean!
+  addPlaceFavorite(placeId: String!): PlaceFavorite!
+  removePlaceFavorite(placeId: String!): Boolean!
   checkin(data: CreateCheckinInput!): Checkin!
   createPlace(input: CreatePlaceInput!): Place!
   createComment(postId: String!, content: String!): Comment!
   updateComment(id: String!, content: String!): Comment!
   deleteComment(id: String!): Boolean!
   createPost(input: CreatePostInput!): Post!
+  createMedia(postId: ID!, data: MediaInput!): Media!
+  updateMedia(id: ID!, data: MediaInput!): Media!
+  deleteMedia(id: ID!): Boolean!
+  deletePostMedia(postId: ID!): Int!
+  createReward(data: CreateRewardInput!): Reward!
+  updateReward(id: ID!, data: UpdateRewardInput!): Reward!
+  deleteReward(id: ID!): Boolean!
+  redeemReward(rewardId: ID!): RedeemRewardResponse!
+  voteUseful(postId: ID!): UsefulVote!
+  removeVote(postId: ID!): Boolean!
+
+  """Create a new trip for authenticated user"""
+  createTrip(input: CreateTripInput!): TripResponse!
+
+  """Update an existing trip"""
+  updateTrip(input: UpdateTripInput!): TripResponse!
+
+  """Delete a trip"""
+  deleteTrip(id: ID!): Boolean!
+
+  """Add a post to a trip"""
+  addPostToTrip(tripId: ID!, postId: ID!): Post!
+
+  """Remove a post from a trip"""
+  removePostFromTrip(postId: ID!): Post!
+
+  """Update trip status"""
+  updateTripStatus(tripId: ID!, status: String!): TripResponse!
+
+  """Add a location to trip"""
+  addLocationToTrip(tripId: ID!, location: String!): TripResponse!
+
+  """Remove a location from trip"""
+  removeLocationFromTrip(tripId: ID!, location: String!): TripResponse!
+
+  """Add a place to trip"""
+  addPlaceToTrip(tripId: ID!, placeId: ID!): TripResponse!
+
+  """Remove a place from trip"""
+  removePlaceFromTrip(tripId: ID!, placeId: ID!): TripResponse!
+
+  """Invite a collaborator to a trip"""
+  inviteCollaborator(input: InviteCollaboratorInput!): CollaboratorResponse!
+
+  """Accept a collaboration invitation"""
+  acceptInvitation(collaboratorId: ID!): CollaboratorResponse!
+
+  """Reject a collaboration invitation"""
+  rejectInvitation(collaboratorId: ID!): Boolean!
+
+  """Remove a collaborator from a trip"""
+  removeCollaborator(collaboratorId: ID!): Boolean!
+
+  """Update a collaborator role"""
+  updateCollaboratorRole(input: UpdateCollaboratorRoleInput!): CollaboratorResponse!
+
+  """Create a new daily itinerary for a trip"""
+  createItinerary(input: CreateItineraryInput!): ItineraryResponse!
+
+  """Update an existing itinerary"""
+  updateItinerary(input: UpdateItineraryInput!): ItineraryResponse!
+
+  """Delete an itinerary and all its activities"""
+  deleteItinerary(id: ID!): Boolean!
+
+  """Create a new activity in an itinerary"""
+  createActivity(input: CreateActivityInput!): ItineraryActivityResponse!
+
+  """Update an existing activity"""
+  updateActivity(input: UpdateActivityInput!): ItineraryActivityResponse!
+
+  """Delete an activity from an itinerary"""
+  deleteActivity(id: ID!): Boolean!
+
+  """Mark an activity as complete"""
+  markActivityComplete(activityId: ID!): ItineraryActivityResponse!
 }
 
 input SignupInput {
@@ -190,4 +672,96 @@ input CreatePostInput {
 input MediaInput {
   url: String!
   type: String
+}
+
+input CreateRewardInput {
+  title: String!
+  description: String!
+  category: String!
+  points_required: Float!
+  image_url: String!
+  stock: Float
+  expiry_date: DateTime
+  partner_id: String
+}
+
+input UpdateRewardInput {
+  title: String
+  description: String
+  stock: Float
+  status: String
+  expiry_date: DateTime
+}
+
+input CreateTripInput {
+  title: String!
+  description: String
+  start_date: DateTime!
+  end_date: DateTime!
+  locations: [String!]
+  status: String
+}
+
+input UpdateTripInput {
+  title: String
+  description: String
+  start_date: DateTime
+  end_date: DateTime
+  locations: [String!]
+  status: String
+  id: ID!
+}
+
+input InviteCollaboratorInput {
+  tripId: ID!
+  collaboratorEmail: String!
+  role: String
+}
+
+input UpdateCollaboratorRoleInput {
+  collaboratorId: ID!
+  role: String!
+}
+
+input CreateItineraryInput {
+  tripId: ID!
+  dayNumber: Float!
+  date: DateTime!
+  title: String
+  description: String
+}
+
+input UpdateItineraryInput {
+  id: ID!
+  title: String
+  description: String
+}
+
+input CreateActivityInput {
+  itineraryId: ID!
+  title: String!
+  description: String
+  startTime: String!
+  endTime: String!
+  location: String
+  placeId: String
+  category: String
+  notes: String
+  estimatedCost: Float
+  priority: Float
+}
+
+input UpdateActivityInput {
+  id: ID!
+  title: String
+  description: String
+  startTime: String
+  endTime: String
+  location: String
+  placeId: String
+  category: String
+  notes: String
+  estimatedCost: Float
+  isCompleted: Boolean
+  priority: Float
 }

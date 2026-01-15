@@ -1,9 +1,15 @@
-import { Injectable, Logger } from "@nestjs/common";
+import { Injectable, Logger, BadRequestException, NotFoundException } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { DataSource, Repository } from "typeorm";
 import { Friendship } from "./friendship.entity";
 import { FriendshipStatus } from "./friendship-status.enum";
 import { User } from "src/user/entities/user.entity";
+import { Like } from "./like.entity";
+import { CheckinFavorite } from "./checkin-favorite.entity";
+import { PlaceFavorite } from "./place-favorite.entity";
+import { Post } from "src/post/post.entity";
+import { Checkin } from "src/checkin/checkin.entity";
+import { Place } from "src/place/place.entity";
 
 // Error messages (English only)
 const ERROR_MESSAGES = {
@@ -24,6 +30,20 @@ export class FriendshipService {
   constructor(
     @InjectRepository(Friendship)
     private friendshipRepo: Repository<Friendship>,
+    @InjectRepository(Like)
+    private likeRepo: Repository<Like>,
+    @InjectRepository(CheckinFavorite)
+    private checkinFavoriteRepo: Repository<CheckinFavorite>,
+    @InjectRepository(PlaceFavorite)
+    private placeFavoriteRepo: Repository<PlaceFavorite>,
+    @InjectRepository(User)
+    private userRepo: Repository<User>,
+    @InjectRepository(Post)
+    private postRepo: Repository<Post>,
+    @InjectRepository(Checkin)
+    private checkinRepo: Repository<Checkin>,
+    @InjectRepository(Place)
+    private placeRepo: Repository<Place>,
     private dataSource: DataSource,
   ) {}
 
@@ -230,5 +250,291 @@ export class FriendshipService {
     });
     
     return relation?.status || null;
+  }
+
+  // ==================== Follow System ====================
+
+  async followUser(followerId: string, followingId: string): Promise<User> {
+    if (followerId === followingId) {
+      throw new BadRequestException('Cannot follow yourself');
+    }
+
+    const follower = await this.userRepo.findOne({ where: { id: followerId }, relations: ['followings'] });
+    const following = await this.userRepo.findOne({ where: { id: followingId } });
+
+    if (!follower || !following) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Check if already following
+    const isFollowing = follower.followings?.some(u => u.id === followingId);
+    if (isFollowing) {
+      throw new BadRequestException('Already following this user');
+    }
+
+    if (!follower.followings) {
+      follower.followings = [];
+    }
+    follower.followings.push(following);
+
+    await this.userRepo.save(follower);
+    this.logger.log(`User ${followerId} followed ${followingId}`);
+    return following;
+  }
+
+  async unfollowUser(followerId: string, followingId: string): Promise<boolean> {
+    const follower = await this.userRepo.findOne({ where: { id: followerId }, relations: ['followings'] });
+
+    if (!follower) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (!follower.followings?.some(u => u.id === followingId)) {
+      throw new BadRequestException('Not following this user');
+    }
+
+    follower.followings = follower.followings.filter(u => u.id !== followingId);
+    await this.userRepo.save(follower);
+
+    this.logger.log(`User ${followerId} unfollowed ${followingId}`);
+    return true;
+  }
+
+  async getFollowers(userId: string): Promise<User[]> {
+    const user = await this.userRepo.findOne({
+      where: { id: userId },
+      relations: ['followers'],
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    return user.followers || [];
+  }
+
+  async getFollowings(userId: string): Promise<User[]> {
+    const user = await this.userRepo.findOne({
+      where: { id: userId },
+      relations: ['followings'],
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    return user.followings || [];
+  }
+
+  async isFollowing(followerId: string, followingId: string): Promise<boolean> {
+    const follower = await this.userRepo.findOne({
+      where: { id: followerId },
+      relations: ['followings'],
+    });
+
+    return follower?.followings?.some(u => u.id === followingId) ?? false;
+  }
+
+  // ==================== Like Post System ====================
+
+  async likePost(userId: string, postId: string): Promise<Like> {
+    const user = await this.userRepo.findOne({ where: { id: userId } });
+    const post = await this.postRepo.findOne({ where: { id: postId } });
+
+    if (!user || !post) {
+      throw new NotFoundException('User or Post not found');
+    }
+
+    // Check if already liked
+    const existing = await this.likeRepo.findOne({
+      where: { user: { id: userId }, post: { id: postId } },
+    });
+
+    if (existing) {
+      throw new BadRequestException('Already liked this post');
+    }
+
+    const like = this.likeRepo.create({
+      user,
+      post,
+    });
+
+    await this.likeRepo.save(like);
+    this.logger.log(`User ${userId} liked post ${postId}`);
+    return like;
+  }
+
+  async unlikePost(userId: string, postId: string): Promise<boolean> {
+    const like = await this.likeRepo.findOne({
+      where: { user: { id: userId }, post: { id: postId } },
+    });
+
+    if (!like) {
+      throw new NotFoundException('Like not found');
+    }
+
+    await this.likeRepo.remove(like);
+    this.logger.log(`User ${userId} unliked post ${postId}`);
+    return true;
+  }
+
+  async getPostLikes(postId: string): Promise<Like[]> {
+    return this.likeRepo.find({
+      where: { post: { id: postId } },
+      relations: ['user'],
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  async hasUserLikedPost(userId: string, postId: string): Promise<boolean> {
+    const like = await this.likeRepo.findOne({
+      where: { user: { id: userId }, post: { id: postId } },
+    });
+
+    return !!like;
+  }
+
+  async getPostLikeCount(postId: string): Promise<number> {
+    return this.likeRepo.count({
+      where: { post: { id: postId } },
+    });
+  }
+
+  async getUserLikedPosts(userId: string): Promise<Post[]> {
+    const likes = await this.likeRepo.find({
+      where: { user: { id: userId } },
+      relations: ['post'],
+      order: { createdAt: 'DESC' },
+    });
+
+    return likes.map(like => like.post);
+  }
+
+  // ==================== Checkin Favorites ====================
+
+  async addCheckinFavorite(userId: string, checkinId: string): Promise<CheckinFavorite> {
+    const user = await this.userRepo.findOne({ where: { id: userId } });
+    const checkin = await this.checkinRepo.findOne({ where: { id: checkinId } });
+
+    if (!user || !checkin) {
+      throw new NotFoundException('User or Checkin not found');
+    }
+
+    // Check if already favorited
+    const existing = await this.checkinFavoriteRepo.findOne({
+      where: { user: { id: userId }, checkin: { id: checkinId } },
+    });
+
+    if (existing) {
+      throw new BadRequestException('Already favorited this checkin');
+    }
+
+    const favorite = this.checkinFavoriteRepo.create({
+      user,
+      checkin,
+    });
+
+    await this.checkinFavoriteRepo.save(favorite);
+    this.logger.log(`User ${userId} favorited checkin ${checkinId}`);
+    return favorite;
+  }
+
+  async removeCheckinFavorite(userId: string, checkinId: string): Promise<boolean> {
+    const favorite = await this.checkinFavoriteRepo.findOne({
+      where: { user: { id: userId }, checkin: { id: checkinId } },
+    });
+
+    if (!favorite) {
+      throw new NotFoundException('Favorite not found');
+    }
+
+    await this.checkinFavoriteRepo.remove(favorite);
+    this.logger.log(`User ${userId} removed checkin favorite ${checkinId}`);
+    return true;
+  }
+
+  async getUserFavoriteCheckins(userId: string): Promise<Checkin[]> {
+    const favorites = await this.checkinFavoriteRepo.find({
+      where: { user: { id: userId } },
+      relations: ['checkin'],
+      order: { createdAt: 'DESC' },
+    });
+
+    return favorites.map(fav => fav.checkin);
+  }
+
+  async isCheckinFavorited(userId: string, checkinId: string): Promise<boolean> {
+    const favorite = await this.checkinFavoriteRepo.findOne({
+      where: { user: { id: userId }, checkin: { id: checkinId } },
+    });
+
+    return !!favorite;
+  }
+
+  // ==================== Place Favorites ====================
+
+  async addPlaceFavorite(userId: string, placeId: string): Promise<PlaceFavorite> {
+    const user = await this.userRepo.findOne({ where: { id: userId } });
+    const place = await this.placeRepo.findOne({ where: { id: placeId } });
+
+    if (!user || !place) {
+      throw new NotFoundException('User or Place not found');
+    }
+
+    // Check if already favorited
+    const existing = await this.placeFavoriteRepo.findOne({
+      where: { user: { id: userId }, place: { id: placeId } },
+    });
+
+    if (existing) {
+      throw new BadRequestException('Already favorited this place');
+    }
+
+    const favorite = this.placeFavoriteRepo.create({
+      user,
+      place,
+    });
+
+    await this.placeFavoriteRepo.save(favorite);
+    this.logger.log(`User ${userId} favorited place ${placeId}`);
+    return favorite;
+  }
+
+  async removePlaceFavorite(userId: string, placeId: string): Promise<boolean> {
+    const favorite = await this.placeFavoriteRepo.findOne({
+      where: { user: { id: userId }, place: { id: placeId } },
+    });
+
+    if (!favorite) {
+      throw new NotFoundException('Favorite not found');
+    }
+
+    await this.placeFavoriteRepo.remove(favorite);
+    this.logger.log(`User ${userId} removed place favorite ${placeId}`);
+    return true;
+  }
+
+  async getUserFavoritePlaces(userId: string): Promise<Place[]> {
+    const favorites = await this.placeFavoriteRepo.find({
+      where: { user: { id: userId } },
+      relations: ['place'],
+      order: { createdAt: 'DESC' },
+    });
+
+    return favorites.map(fav => fav.place);
+  }
+
+  async isPlaceFavorited(userId: string, placeId: string): Promise<boolean> {
+    const favorite = await this.placeFavoriteRepo.findOne({
+      where: { user: { id: userId }, place: { id: placeId } },
+    });
+
+    return !!favorite;
+  }
+
+  async getPlaceFavoriteCount(placeId: string): Promise<number> {
+    return this.placeFavoriteRepo.count({
+      where: { place: { id: placeId } },
+    });
   }
 }
