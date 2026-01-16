@@ -4,7 +4,7 @@ import { Repository } from 'typeorm';
 import { Reward } from './reward.entity';
 import { User } from 'src/user/entities/user.entity';
 import { CreateRewardInput, UpdateRewardInput } from './dto/reward.input';
-import { RewardStats } from './dto/redeem-reward.input';
+import { RedeemHistoryDto, RewardItemDto, RewardStats, UserRewardsDto } from './dto/reward-query.dto';
 
 @Injectable()
 export class RewardService {
@@ -210,4 +210,111 @@ export class RewardService {
       expired,
     };
   }
+
+  /**
+   * Get user rewards summary with available rewards
+   */
+  async getUserRewards(userId: string, limit: number = 20, offset: number = 0): Promise<UserRewardsDto> {
+    this.logger.debug(`Fetching rewards for user ${userId}`);
+
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Get available rewards
+    const [rewards, total] = await this.rewardRepository.findAndCount({
+      where: { status: 'available' },
+      order: { points_required: 'ASC' },
+      take: limit,
+      skip: offset,
+    });
+
+    // Calculate tier based on points
+    let tier = 'BRONZE';
+    let nextTierPoints = 500;
+    if (user.points_balance >= 500) tier = 'SILVER', nextTierPoints = 2000;
+    if (user.points_balance >= 2000) tier = 'GOLD', nextTierPoints = 5000;
+    if (user.points_balance >= 5000) tier = 'PLATINUM', nextTierPoints = 10000;
+
+    return {
+      currentPoints: user.points_balance,
+      tier,
+      nextTierPoints,
+      totalRedeemed: 0, // TODO: Count redeemed vouchers for user
+      rewards: rewards.map(r => ({
+        id: r.id,
+        title: r.title,
+        description: r.description,
+        image: r.image_url,
+        pointsRequired: r.points_required,
+        category: r.category,
+        partner: r.partner_id,
+        inStock: r.stock > 0 && r.status === 'available',
+        likes: 0, // TODO: Implement likes
+        redeemed: 0, // TODO: Count redeemed instances
+        isLimited: r.stock < 10,
+        expiresAt: r.expiry_date,
+        tier,
+        redeemCode: `CODE-${r.id.substring(0, 8).toUpperCase()}`,
+        qrCode: `https://qr.example.com/${r.id}`, // TODO: Generate real QR code    
+      })),
+    };
+  }
+
+  /**
+   * Get reward detail with all information
+   */
+  async getRewardDetail(id: string): Promise<RewardItemDto> {
+    this.logger.debug(`Fetching reward detail: ${id}`);
+
+    const reward = await this.rewardRepository.findOne({ where: { id } });
+    if (!reward) {
+      throw new NotFoundException('Reward not found');
+    }
+
+    return {
+      id: reward.id,
+      title: reward.title,
+      description: reward.description,
+      image: reward.image_url,
+      pointsRequired: reward.points_required,
+      category: reward.category,
+      partner: reward.partner_id,
+      inStock: reward.stock > 0 && reward.status === 'available',
+      likes: 0, // TODO: Implement likes
+      redeemed: 0, // TODO: Count redeemed instances
+      isLimited: reward.stock < 10,
+      expiresAt: reward.expiry_date,
+      qrCode: `https://qr.example.com/${reward.id}`, // TODO: Generate real QR code
+      redeemCode: `CODE-${reward.id.substring(0, 8).toUpperCase()}`,
+      partnerContact: 'contact@partner.com', // TODO: Get from partner info
+      validUntil: reward.expiry_date,
+      tier: reward.points_required >= 5000 ? 'PLATINUM' :
+            reward.points_required >= 2000 ? 'GOLD' :
+            reward.points_required >= 500 ? 'SILVER' : 'BRONZE',
+    };
+  }
+
+  /**
+   * Get user's redeem history (vouchers)
+   */
+  async getUserRedeemHistory(userId: string, limit: number = 20, offset: number = 0): Promise<RedeemHistoryDto> {
+    this.logger.debug(`Fetching redeem history for user ${userId}`);
+
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // TODO: Query from Voucher table once it's integrated
+    // For now, return mock data structure
+    return {
+      items: [],
+      total: 0,
+      limit,
+      offset,
+    };
+  }
 }
+

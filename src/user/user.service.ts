@@ -1,7 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { User } from './entities/user.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { UpdateProfileInput, NotificationSettings, PrivacySettings, SecuritySettings } from './dto/user-settings.dto';
 
 @Injectable()
 export class UserService {
@@ -76,5 +77,88 @@ export class UserService {
     return this.userRepo.createQueryBuilder('user')
       .whereInIds(ids)
       .getMany();
+  }
+
+  async updateProfile(id: string, input: UpdateProfileInput): Promise<User> {
+    this.logger.log(`Updating profile for user: ${id}`);
+    const user = await this.findById(id);
+    if (!user) throw new BadRequestException('User not found');
+
+    // Update allowed fields
+    if (input.name) user.name = input.name;
+    if (input.phone) user.phone = input.phone;
+    if (input.avatar) user.avatar = input.avatar;
+    if (input.dateOfBirth) user.dateOfBirth = input.dateOfBirth;
+    if (input.gender) user.gender = input.gender;
+    if (input.location) user.location = input.location;
+    if (input.bio) user.bio = input.bio;
+    if (input.interests) user.interests = input.interests;
+    if (input.country) user.country = input.country;
+    if (input.hobby) user.hobby = input.hobby;
+
+    return this.userRepo.save(user);
+  }
+
+  async updateUserAvatar(id: string, avatarUrl: string): Promise<User> {
+    this.logger.log(`Updating avatar for user: ${id}`);
+    const user = await this.findById(id);
+    if (!user) throw new BadRequestException('User not found');
+
+    user.avatar = avatarUrl;
+    return this.userRepo.save(user);
+  }
+
+  async updateNotificationSettings(id: string, settings: NotificationSettings): Promise<User> {
+    this.logger.log(`Updating notification settings for user: ${id}`);
+    const user = await this.findById(id);
+    if (!user) throw new BadRequestException('User not found');
+
+    user.notificationSettings = {
+      ...user.notificationSettings,
+      ...settings,
+    };
+    return this.userRepo.save(user);
+  }
+
+  async updatePrivacySettings(id: string, settings: PrivacySettings): Promise<User> {
+    this.logger.log(`Updating privacy settings for user: ${id}`);
+    const user = await this.findById(id);
+    if (!user) throw new BadRequestException('User not found');
+
+    user.privacySettings = {
+      ...user.privacySettings,
+      ...settings,
+    };
+    return this.userRepo.save(user);
+  }
+
+  async updateSecuritySettings(id: string, settings: SecuritySettings): Promise<User> {
+    this.logger.log(`Updating security settings for user: ${id}`);
+    const user = await this.findById(id);
+    if (!user) throw new BadRequestException('User not found');
+
+    user.securitySettings = {
+      ...user.securitySettings,
+      ...settings,
+    };
+    return this.userRepo.save(user);
+  }
+
+  async getNotificationSettings(id: string): Promise<NotificationSettings | null> {
+    this.logger.debug(`Fetching notification settings for user: ${id}`);
+    const user = await this.findById(id);
+    return user?.notificationSettings || null;
+  }
+
+  async getPrivacySettings(id: string): Promise<PrivacySettings | null> {
+    this.logger.debug(`Fetching privacy settings for user: ${id}`);
+    const user = await this.findById(id);
+    return user?.privacySettings || null;
+  }
+
+  async getSecuritySettings(id: string): Promise<SecuritySettings | null> {
+    this.logger.debug(`Fetching security settings for user: ${id}`);
+    const user = await this.findById(id);
+    return user?.securitySettings || null;
   }
 }

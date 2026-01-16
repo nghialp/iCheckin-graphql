@@ -1,5 +1,5 @@
 import { Resolver, Query, Mutation, Args, ID, Int } from '@nestjs/graphql';
-import { UseGuards, Logger, NotFoundException } from '@nestjs/common';
+import { UseGuards, Logger, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { Media } from './media.entity';
 import { MediaService } from './media.service';
 import { MediaInput } from './dto/media.input';
@@ -36,7 +36,7 @@ export class MediaResolver {
     }
 
     if (post.user?.id !== user?.id) {
-      throw new Error('You are not authorized to add media to this post');
+      throw new ForbiddenException('You are not authorized to add media to this post');
     }
 
     return this.mediaService.createMedia(postId, data);
@@ -80,7 +80,7 @@ export class MediaResolver {
 
     // Verify user owns the post
     if (media.post?.user?.id !== user?.id) {
-      throw new Error('You are not authorized to update this media');
+      throw new ForbiddenException('You are not authorized to update this media');
     }
 
     return this.mediaService.updateMedia(id, data);
@@ -105,7 +105,7 @@ export class MediaResolver {
 
     // Verify user owns the post
     if (media.post?.user?.id !== user?.id) {
-      throw new Error('You are not authorized to delete this media');
+      throw new ForbiddenException('You are not authorized to delete this media');
     }
 
     return this.mediaService.deleteMedia(id);
@@ -129,7 +129,7 @@ export class MediaResolver {
     }
 
     if (post.user?.id !== user?.id) {
-      throw new Error('You are not authorized to delete media from this post');
+      throw new ForbiddenException('You are not authorized to delete media from this post');
     }
 
     return this.mediaService.deleteMediaByPostId(postId);

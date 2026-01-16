@@ -2,7 +2,7 @@ import { Resolver, Query, Args, Mutation } from '@nestjs/graphql';
 import { Checkin } from './checkin.entity';
 import { CheckinService } from './checkin.service';
 import { GqlAuthGuard } from 'src/auth/guards/gql-auth.guard';
-import { UseGuards } from '@nestjs/common';
+import { UseGuards, NotFoundException, BadRequestException } from '@nestjs/common';
 import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
 import { User } from 'src/user/entities/user.entity';
 import { CreateCheckinInput } from './dto/checkin.input';
@@ -25,14 +25,14 @@ export class CheckinResolver {
         if (data.placeId) {
             place = await this.placeService.findOneBy({ id: data.placeId });
             if (!place) {
-                throw new Error('Place not found');
+                throw new NotFoundException('Place not found');
             }
         } 
         // If mapboxId is provided, search in DB first, otherwise call Mapbox API
         else if (data.mapboxId) {
             place = await this.placeService.findOrCreateFromMapboxId(data.mapboxId);
         } else {
-            throw new Error('Please provide placeId or mapboxId');
+            throw new BadRequestException('Please provide placeId or mapboxId');
         }
 
         return this.checkinService.createCheckin(user, place, data.status, data.mood);

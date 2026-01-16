@@ -157,6 +157,77 @@ type PlaceFavorite {
   createdAt: DateTime!
 }
 
+type UserBasicInfo {
+  id: ID!
+  name: String
+  email: String
+  phone: String
+  avatar: String
+  dateOfBirth: String
+  gender: String
+  location: String
+  bio: String
+}
+
+type NotificationSettings {
+  pushNotifications: Boolean
+  emailNotifications: Boolean
+  smsNotifications: Boolean
+  promotions: Boolean
+  updates: Boolean
+  reminders: Boolean
+}
+
+type PrivacySettings {
+  locationAccess: Boolean
+  contactsAccess: Boolean
+  cameraAccess: Boolean
+  microphoneAccess: Boolean
+  profileVisibility: String
+  activityStatus: Boolean
+}
+
+type LoginHistoryItem {
+  timestamp: String
+  device: String
+  ip: String
+  location: String
+  status: String
+}
+
+type ConnectedDeviceItem {
+  id: String
+  name: String
+  type: String
+  lastActive: String
+}
+
+type SecuritySettings {
+  twoFactorEnabled: Boolean
+  loginHistory: [LoginHistoryItem!]
+  connectedDevices: [ConnectedDeviceItem!]
+}
+
+type UpdateProfileResponse {
+  success: Boolean!
+  message: String!
+  user: UserBasicInfo
+}
+
+type SettingsUpdateResponse {
+  success: Boolean!
+  message: String!
+  notificationSettings: NotificationSettings
+  privacySettings: PrivacySettings
+  securitySettings: SecuritySettings
+}
+
+type AvatarUpdateResponse {
+  success: Boolean!
+  message: String!
+  user: UserBasicInfo
+}
+
 type User {
   id: ID!
   name: String!
@@ -172,6 +243,14 @@ type User {
   country: String
   interests: [String!]
   privacy_settings: String
+  phone: String
+  dateOfBirth: String
+  gender: String
+  location: String
+  hobby: String
+  notificationSettings: NotificationSettings
+  privacySettings: PrivacySettings
+  securitySettings: SecuritySettings
   trips: [Trip!]
   tripCollaborations: [TripCollaborator!]
   followers: [User!]
@@ -271,19 +350,6 @@ type RedeemRewardResponse {
   voucher: Voucher
 }
 
-type RedemptionEligibility {
-  eligible: Boolean!
-  reason: String
-  pointsNeeded: Int
-}
-
-type RewardStats {
-  total: Int!
-  available: Int!
-  outOfStock: Int!
-  expired: Int!
-}
-
 type VoucherDetailsResponse {
   id: String!
   voucher_code: String!
@@ -294,6 +360,90 @@ type VoucherDetailsResponse {
   redeem_date: DateTime!
   used_date: DateTime
   expiry_date: DateTime
+}
+
+type RewardItem {
+  id: ID!
+  title: String!
+  description: String!
+  image: String
+  pointsRequired: Int!
+  category: String!
+  partner: String
+  inStock: Boolean!
+  likes: Int
+  redeemed: Int
+  isLimited: Boolean!
+  expiresAt: String
+  tier: String
+}
+
+type RedeemHistoryItem {
+  id: ID!
+  reward: RewardItem!
+  redeemedAt: String!
+  status: String!
+  qrCode: String
+  expiresAt: String
+  usedAt: String
+}
+
+type RedemptionEligibility {
+  eligible: Boolean!
+  reason: String
+  pointsNeeded: Int
+}
+
+type UserRewardsDto {
+  currentPoints: Int!
+  tier: String!
+  nextTierPoints: Int!
+  totalRedeemed: Int!
+  rewards: [RewardItemDto!]!
+}
+
+type RewardStats {
+  total: Int!
+  available: Int!
+  outOfStock: Int!
+  expired: Int!
+}
+
+type RewardItemDto {
+  id: String!
+  title: String!
+  description: String
+  image: String
+  pointsRequired: Int!
+  category: String
+  partner: String
+  inStock: Boolean!
+  likes: Int!
+  redeemed: Int!
+  isLimited: Boolean!
+  expiresAt: DateTime
+  tier: String!
+  qrCode: String!
+  redeemCode: String!
+  partnerContact: String
+  validUntil: DateTime
+}
+
+type RedeemHistoryItemDto {
+  id: String!
+  rewardTitle: String!
+  rewardDescription: String
+  image: String
+  redeemedAt: DateTime!
+  pointsSpent: Int!
+  isValid: Boolean!
+}
+
+type RedeemHistoryDto {
+  items: [RedeemHistoryItemDto!]!
+  total: Int!
+  limit: Int!
+  offset: Int!
 }
 
 type UsefulVote {
@@ -416,6 +566,9 @@ type ItineraryStatsResponse {
 type Query {
   getUsers: [User!]!
   getUser(id: String!): User!
+  me: User
+  getNotificationSettings: NotificationSettings
+  getPrivacySettings: PrivacySettings
   getProfile: User!
   myFriends: [User!]!
   getFollowers(userId: String!): [User!]!
@@ -448,6 +601,9 @@ type Query {
   getRewardStats: RewardStats!
   getUserVouchers(status: String): [VoucherDetailsResponse!]!
   checkRedemptionEligibility(rewardId: ID!): RedemptionEligibility!
+  userRewards(limit: Int! = 20, offset: Int! = 0): UserRewardsDto!
+  getRewardDetail(id: ID!): RewardItemDto
+  getRedeemHistory(limit: Int! = 20, offset: Int! = 0): RedeemHistoryDto!
   getPointsSummary: PointsSummaryResponse!
   getTransactionHistory(limit: Float! = 50, offset: Float! = 0): [PointLedger!]!
   getPointsRules: [String!]!
@@ -522,6 +678,10 @@ type Query {
 }
 
 type Mutation {
+  updateProfile(input: UpdateProfileInput!): UpdateProfileResponse!
+  updateUserAvatar(avatarUrl: String!): AvatarUpdateResponse!
+  updateNotificationSettings(input: NotificationSettingsInput!): SettingsUpdateResponse!
+  updatePrivacySettings(input: PrivacySettingsInput!): SettingsUpdateResponse!
   signup(input: SignupInput!): AuthResponse!
   login(input: LoginInput!): AuthResponse!
   oauthLogin(input: OAuthInput!): AuthResponse!
@@ -621,6 +781,38 @@ type Mutation {
 
   """Mark an activity as complete"""
   markActivityComplete(activityId: ID!): ItineraryActivityResponse!
+}
+
+input UpdateProfileInput {
+  name: String
+  email: String
+  phone: String
+  avatar: String
+  dateOfBirth: String
+  gender: String
+  location: String
+  bio: String
+  interests: [String!]
+  country: String
+  hobby: String
+}
+
+input NotificationSettingsInput {
+  pushNotifications: Boolean
+  emailNotifications: Boolean
+  smsNotifications: Boolean
+  promotions: Boolean
+  updates: Boolean
+  reminders: Boolean
+}
+
+input PrivacySettingsInput {
+  locationAccess: Boolean
+  contactsAccess: Boolean
+  cameraAccess: Boolean
+  microphoneAccess: Boolean
+  profileVisibility: String
+  activityStatus: Boolean
 }
 
 input SignupInput {

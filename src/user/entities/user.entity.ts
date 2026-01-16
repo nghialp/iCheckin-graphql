@@ -8,6 +8,7 @@ import { TripCollaborator } from "src/trip/trip-collaborator.entity";
 import { Like } from "src/friendships/like.entity";
 import { CheckinFavorite } from "src/friendships/checkin-favorite.entity";
 import { PlaceFavorite } from "src/friendships/place-favorite.entity";
+import { NotificationSettings, PrivacySettings, SecuritySettings } from "../dto/user-settings.dto";
 
 @ObjectType()
 @Entity()
@@ -73,6 +74,38 @@ export class User {
     @Field({ nullable: true })
     @Column({ nullable: true })
     privacy_settings?: string;
+
+    @Field({ nullable: true })
+    @Column({ nullable: true })
+    phone?: string;
+
+    @Field({ nullable: true })
+    @Column({ nullable: true })
+    dateOfBirth?: string;
+
+    @Field({ nullable: true })
+    @Column({ nullable: true })
+    gender?: string;
+
+    @Field({ nullable: true })
+    @Column({ nullable: true })
+    location?: string;
+
+    @Field({ nullable: true })
+    @Column({ nullable: true })
+    hobby?: string;
+
+    @Field(() => NotificationSettings, { nullable: true })
+    @Column({ type: 'jsonb', nullable: true })
+    notificationSettings?: NotificationSettings;
+
+    @Field(() => PrivacySettings, { nullable: true })
+    @Column({ type: 'jsonb', nullable: true })
+    privacySettings?: PrivacySettings;
+
+    @Field(() => SecuritySettings, { nullable: true })
+    @Column({ type: 'jsonb', nullable: true })
+    securitySettings?: SecuritySettings;
 
     @OneToMany(() => Post, post => post.user)
     posts: Post[];

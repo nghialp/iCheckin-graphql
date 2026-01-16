@@ -1,4 +1,4 @@
-import { Injectable, Logger } from "@nestjs/common";
+import { Injectable, Logger, NotFoundException, ForbiddenException } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { Checkin } from "./checkin.entity";
@@ -71,12 +71,12 @@ export class CheckinService {
 
     if (!checkin) {
       this.logger.warn(`Checkin not found: ${id}`);
-      throw new Error(ERROR_MESSAGES.CHECKIN_NOT_FOUND);
+      throw new NotFoundException(ERROR_MESSAGES.CHECKIN_NOT_FOUND);
     }
 
     if (checkin.user.id !== userId) {
       this.logger.warn(`User ${userId} attempted to delete checkin ${id} owned by ${checkin.user.id}`);
-      throw new Error(ERROR_MESSAGES.UNAUTHORIZED_DELETE);
+      throw new ForbiddenException(ERROR_MESSAGES.UNAUTHORIZED_DELETE);
     }
 
     await this.checkinRepo.remove(checkin);

@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger, StreamableFile } from "@nestjs/common";
+import { Inject, Injectable, Logger, StreamableFile, NotFoundException, BadRequestException } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import axios, { AxiosError } from "axios";
 import { Repository } from "typeorm";
@@ -75,7 +75,7 @@ export class PlaceService {
 			const placeData = await this.mapboxService.getPlaceDetails(mapboxId);
 
 			if (!placeData) {
-				throw new Error(`Place not found in Mapbox: ${mapboxId}`);
+				throw new NotFoundException(`Place not found in Mapbox: ${mapboxId}`);
 			}
 
 			const transformedData = this.mapboxService.transformToPlace(placeData);
@@ -102,7 +102,7 @@ export class PlaceService {
 		} catch (error) {
 			const axiosError = error as AxiosError;
 			this.logger.error(`Failed to fetch place details: ${axiosError?.message || String(error)}`);
-			throw new Error('Unable to fetch place details from Mapbox');
+			throw new BadRequestException('Unable to fetch place details from Mapbox');
 		}
 	}
 
@@ -162,7 +162,7 @@ export class PlaceService {
 		// Validate coordinates
 		if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
 			this.logger.warn(`Invalid coordinates: (${lat}, ${lng})`);
-			throw new Error('Invalid coordinates');
+			throw new BadRequestException('Invalid coordinates');
 		}
 
 		try {
@@ -171,7 +171,7 @@ export class PlaceService {
 		} catch (error) {
 			const axiosError = error as AxiosError;
 			this.logger.error(`Reverse geocoding error: ${axiosError?.message || String(error)}`);
-			throw new Error('Unable to get address from coordinates');
+			throw new BadRequestException('Unable to get address from coordinates');
 		}
 	}
 
@@ -184,7 +184,7 @@ export class PlaceService {
 
 		// Validate input
 		if (radius <= 0 || radius > 50000) {
-			throw new Error('Search radius must be between 1 and 50000 meters');
+			throw new BadRequestException('Search radius must be between 1 and 50000 meters');
 		}
 
 		const cacheKey = `place:nearby:${lat},${lng}:${radius}`;
@@ -210,7 +210,7 @@ export class PlaceService {
 		} catch (error) {
 			const axiosError = error as AxiosError;
 			this.logger.error(`Nearby places API error: ${axiosError?.message || String(error)}`);
-			throw new Error('Unable to search nearby places');
+			throw new BadRequestException('Unable to search nearby places');
 		}
 	}
 
@@ -226,7 +226,7 @@ export class PlaceService {
 		this.logger.log(`Searching places with keyword: "${keyword}" at (${lat}, ${lng})`);
 
 		if (!keyword || keyword.trim().length === 0) {
-			throw new Error('Search keyword cannot be empty');
+			throw new BadRequestException('Search keyword cannot be empty');
 		}
 
 		// Create cache key
@@ -244,7 +244,7 @@ export class PlaceService {
 			let features;
 			if (lat !== undefined && lng !== undefined) {
 				if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
-					throw new Error('Invalid coordinates');
+					throw new BadRequestException('Invalid coordinates');
 				}
 				features = await this.mapboxService.searchByText(keyword, {
 					proximity: [lng, lat],
@@ -267,7 +267,7 @@ export class PlaceService {
 		} catch (error) {
 			const axiosError = error as AxiosError;
 			this.logger.error(`Search places API error: ${axiosError?.message || String(error)}`);
-			throw new Error('Unable to search places');
+			throw new BadRequestException('Unable to search places');
 		}
 	}
 }

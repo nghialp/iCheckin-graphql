@@ -8,8 +8,8 @@ import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
 import { User } from 'src/user/entities/user.entity';
 import { PointLedgerService } from 'src/pointledger/pointledger.service';
 import { RedeemRewardResponse } from 'src/pointledger/dto/pointledger.dto';
-import { RedemptionEligibility, RewardStats } from './dto/redeem-reward.input';
 import { VoucherDetailsResponse } from 'src/voucher/dto/voucher.dto';
+import { RedeemHistoryDto, RedemptionEligibility, RewardItemDto, RewardStats, UserRewardsDto } from './dto/reward-query.dto';
 
 @Resolver(() => Reward)
 export class RewardResolver {
@@ -225,5 +225,52 @@ export class RewardResolver {
       this.logger.error(`Eligibility check failed: ${error.message}`);
       throw new BadRequestException(error.message);
     }
+  }
+
+  /**
+   * Get user's rewards summary with available rewards
+   */
+  @Query(() => UserRewardsDto)
+  @UseGuards(GqlAuthGuard)
+  async userRewards(
+    @Args('limit', { type: () => Int, defaultValue: 20 }) limit: number,
+    @Args('offset', { type: () => Int, defaultValue: 0 }) offset: number,
+    @CurrentUser() user: User,
+  ): Promise<UserRewardsDto> {
+    if (!user?.id) {
+      throw new BadRequestException('User not authenticated');
+    }
+
+    this.logger.debug(`Fetching user rewards for user ${user.id}`);
+    return this.rewardService.getUserRewards(user.id, limit, offset);
+  }
+
+  /**
+   * Get reward detail with all information
+   */
+  @Query(() => RewardItemDto, { nullable: true })
+  async getRewardDetail(
+    @Args('id', { type: () => ID }) id: string,
+  ): Promise<RewardItemDto | null> {
+    this.logger.debug(`Fetching reward detail: ${id}`);
+    return this.rewardService.getRewardDetail(id);
+  }
+
+  /**
+   * Get user's redeem history (vouchers)
+   */
+  @Query(() => RedeemHistoryDto)
+  @UseGuards(GqlAuthGuard)
+  async getRedeemHistory(
+    @Args('limit', { type: () => Int, defaultValue: 20 }) limit: number,
+    @Args('offset', { type: () => Int, defaultValue: 0 }) offset: number,
+    @CurrentUser() user: User,
+  ): Promise<RedeemHistoryDto> {
+    if (!user?.id) {
+      throw new BadRequestException('User not authenticated');
+    }
+
+    this.logger.debug(`Fetching redeem history for user ${user.id}`);
+    return this.rewardService.getUserRedeemHistory(user.id, limit, offset);
   }
 }
