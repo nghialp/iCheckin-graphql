@@ -278,6 +278,7 @@ type SearchPlace {
   lat: Float!
   lng: Float!
   thumbnail: String
+  distance: Float
 }
 
 type Voucher {

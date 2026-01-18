@@ -7,6 +7,7 @@ import {
 	Logger,
 	StreamableFile,
 } from '@nestjs/common';
+import type { FastifyReply } from 'fastify';
 import axios, { AxiosError } from 'axios';
 import { ConfigService } from '@nestjs/config';
 
@@ -47,7 +48,7 @@ export class MapboxProxyController {
 		@Query('height') height: string = '200',
 		@Query('zoom') zoom: string = '14',
 		@Query('style') style: string = 'mapbox/streets-v12',
-		@Res({ passthrough: true }) res?: any,
+		@Res({ passthrough: true }) res?: FastifyReply,
 	): Promise<StreamableFile> {
 		try {
 			// Validate required parameters
@@ -102,13 +103,11 @@ export class MapboxProxyController {
 				timeout: 10000,
 			});
 
-			// Set response headers via res if available
+			// Set response headers via res if available (Fastify-compatible)
 			if (res) {
-				res.set({
-					'Content-Type': 'image/png',
-					'Cache-Control': 'public, max-age=86400', // Cache for 24 hours
-					'Content-Length': response.data.length,
-				});
+				res.header('Content-Type', 'image/png');
+				res.header('Cache-Control', 'public, max-age=86400'); // Cache for 24 hours
+				res.header('Content-Length', response.data.length);
 			}
 
 			this.logger.debug(`Static map retrieved successfully`);
@@ -155,7 +154,7 @@ export class MapboxProxyController {
 	async getPreview(
 		@Query('lat') lat?: string,
 		@Query('lng') lng?: string,
-		@Res({ passthrough: true }) res?: any,
+		@Res({ passthrough: true }) res?: FastifyReply,
 	): Promise<StreamableFile> {
 		// Delegate to /static with fixed dimensions
 		return this.getStaticImage(lat, lng, undefined, '200', '150', '13', 'mapbox/streets-v12', res);

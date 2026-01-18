@@ -193,15 +193,28 @@ export class PlaceService {
 		const cached = await this.cacheManager.get<string>(cacheKey);
 		if (cached) {
 			this.logger.debug(`Cache hit for nearby places`);
-			return JSON.parse(cached);
+			const results = JSON.parse(cached) as SearchPlace[];
+			// Calculate distance from reference point
+			return results.map(place => ({
+				...place,
+				distance: this.calculateDistance(lat, lng, place.lat, place.lng),
+			}));
 		}
 
 		try {
 			const features = await this.mapboxService.searchNearby(lng, lat, radius);
 
-			const results = features.map((feature) =>
+			let results = features.map((feature) =>
 				this.mapboxService.transformToSearchPlace(feature)
 			);
+
+			// Calculate distance and sort by distance ascending
+			results = results
+				.map(place => ({
+					...place,
+					distance: this.calculateDistance(lat, lng, place.lat, place.lng),
+				}))
+				.sort((a, b) => (a.distance || 0) - (b.distance || 0));
 
 			// Cache for 1 hour (nearby search changes more frequently)
 			await this.cacheManager.set(cacheKey, JSON.stringify(results), CACHE_TTL_NEARBY);
@@ -212,6 +225,26 @@ export class PlaceService {
 			this.logger.error(`Nearby places API error: ${axiosError?.message || String(error)}`);
 			throw new BadRequestException('Unable to search nearby places');
 		}
+	}
+
+	/**
+	 * Calculate distance between two coordinates using Haversine formula
+	 * @returns distance in kilometers
+	 */
+	calculateDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
+		const R = 6371; // Earth's radius in kilometers
+		const dLat = this.toRad(lat2 - lat1);
+		const dLng = this.toRad(lng2 - lng1);
+		const a =
+			Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+			Math.cos(this.toRad(lat1)) * Math.cos(this.toRad(lat2)) *
+			Math.sin(dLng / 2) * Math.sin(dLng / 2);
+		const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+		return R * c;
+	}
+
+	private toRad(deg: number): number {
+		return deg * (Math.PI / 180);
 	}
 
 	/**
@@ -236,7 +269,15 @@ export class PlaceService {
 		const cached = await this.cacheManager.get<string>(cacheKey);
 		if (cached) {
 			this.logger.debug(`Cache hit for search: ${keyword}`);
-			return JSON.parse(cached);
+			const results = JSON.parse(cached) as SearchPlace[];
+			// Calculate distance if coordinates provided
+			if (lat !== undefined && lng !== undefined) {
+				return results.map(place => ({
+					...place,
+					distance: this.calculateDistance(lat, lng, place.lat, place.lng),
+				}));
+			}
+			return results;
 		}
 
 		try {
@@ -256,9 +297,19 @@ export class PlaceService {
 				});
 			}
 
-			const results = features.map((feature) =>
+			let results = features.map((feature) =>
 				this.mapboxService.transformToSearchPlace(feature)
 			);
+
+			// Calculate distance and sort by distance ascending
+			if (lat !== undefined && lng !== undefined) {
+				results = results
+					.map(place => ({
+						...place,
+						distance: this.calculateDistance(lat, lng, place.lat, place.lng),
+					}))
+					.sort((a, b) => (a.distance || 0) - (b.distance || 0));
+			}
 
 			// Cache for 2 hours (text search results are more stable)
 			await this.cacheManager.set(cacheKey, JSON.stringify(results), CACHE_TTL_SEARCH);

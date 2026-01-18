@@ -26,6 +26,9 @@ export class SearchPlace {
 
   @Field(() => String, { nullable: true })
   thumbnail?: string;
+
+  @Field(() => Float, { nullable: true })
+  distance?: number;
 }
 
 @InputType()
