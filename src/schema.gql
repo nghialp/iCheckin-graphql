@@ -584,6 +584,14 @@ type Query {
   isPlaceFavorited(placeId: String!): Boolean!
   getPlaceFavoriteCount(placeId: String!): Float!
   myCheckins: [Checkin!]!
+  myCheckinsByNearLocation(lat: Float!, lng: Float!, radiusKm: Float, page: Int, limit: Int): [Checkin!]!
+  allCheckinsByNearByLocation(lat: Float!, lng: Float!, radiusKm: Float, page: Int, limit: Int): [Checkin!]!
+  myFriendsCheckins(page: Int, limit: Int): [Checkin!]!
+  myFriendCheckinsByLocation(lat: Float!, lng: Float!, radiusKm: Float, page: Int, limit: Int): [Checkin!]!
+  placeCheckins(mapboxId: String!, page: Int, limit: Int): [Checkin!]!
+  placeCheckinsByFriends(mapboxId: String!, page: Int, limit: Int): [Checkin!]!
+  myCheckinForPlace(mapboxId: String!): Checkin
+  hasCheckedIn(mapboxId: String!): Boolean!
   nearestPlaces(lat: Float!, lng: Float!): [Place!]!
   searchPlaces(keyword: String!, lat: Float!, lng: Float!): [SearchPlace!]!
   nearbyPlaces(lat: Float!, lng: Float!, radius: Float): [SearchPlace!]!
