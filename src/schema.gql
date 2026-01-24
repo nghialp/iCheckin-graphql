@@ -81,6 +81,23 @@ type ItineraryActivity {
   updatedAt: DateTime!
 }
 
+type TripLike {
+  id: ID!
+  user: User!
+  trip: Trip!
+  createdAt: DateTime!
+}
+
+type TripComment {
+  id: ID!
+  user: User!
+  trip: Trip!
+  content: String!
+  parent_id: String
+  createdAt: DateTime!
+  updatedAt: DateTime
+}
+
 type Trip {
   id: ID!
   user: User!
@@ -94,6 +111,8 @@ type Trip {
   posts: [Post!]
   collaborators: [TripCollaborator!]
   itineraries: [TripItinerary!]
+  likes: [TripLike!]
+  comments: [TripComment!]
   checkin_list: [String!]
   createdAt: DateTime!
   updatedAt: DateTime!
@@ -112,13 +131,46 @@ type Place {
   trips: [Trip!]
 }
 
+type CheckinLike {
+  id: ID!
+  user: User!
+  checkin: Checkin!
+  createdAt: DateTime!
+}
+
+type CheckinComment {
+  id: ID!
+  user: User!
+  checkin: Checkin!
+  content: String!
+  parent_id: String
+  createdAt: DateTime!
+  updatedAt: DateTime
+}
+
 type Checkin {
   id: ID!
   user: User!
   place: Place!
   checkedAt: DateTime!
   status: String!
-  mood: String
+  mood: Mood
+  likes: [CheckinLike!]
+  comments: [CheckinComment!]
+}
+
+"""Mood states for check-ins"""
+enum Mood {
+  HAPPY
+  SAD
+  NEUTRAL
+  EXCITED
+  TIRED
+  ENERGETIC
+  GRATEFUL
+  PEACEFUL
+  LOVELY
+  AMAZING
 }
 
 type Friendship {
@@ -267,6 +319,11 @@ type AuthResponse {
   accessToken: String!
   refreshToken: String!
   user: User!
+}
+
+type ToggleLikeResponse {
+  liked: Boolean!
+  likeCount: Int!
 }
 
 type SearchPlace {
@@ -584,6 +641,14 @@ type Query {
   getUserFavoritePlaces(userId: String!): [Place!]!
   isPlaceFavorited(placeId: String!): Boolean!
   getPlaceFavoriteCount(placeId: String!): Float!
+  getCheckinLikes(checkinId: String!): [CheckinLike!]!
+  hasUserLikedCheckin(checkinId: String!): Boolean!
+  getCheckinLikeCount(checkinId: String!): Float!
+  getCheckinComments(checkinId: String!): [CheckinComment!]!
+  getTripLikes(tripId: String!): [TripLike!]!
+  hasUserLikedTrip(tripId: String!): Boolean!
+  getTripLikeCount(tripId: String!): Float!
+  getTripComments(tripId: String!): [TripComment!]!
   myCheckins: [Checkin!]!
   myCheckinsByNearLocation(lat: Float!, lng: Float!, radiusKm: Float, page: Int, limit: Int): [Checkin!]!
   allCheckinsByNearByLocation(lat: Float!, lng: Float!, radiusKm: Float, page: Int, limit: Int): [Checkin!]!
@@ -708,6 +773,12 @@ type Mutation {
   removeCheckinFavorite(checkinId: String!): Boolean!
   addPlaceFavorite(placeId: String!): PlaceFavorite!
   removePlaceFavorite(placeId: String!): Boolean!
+  toggleLikeCheckin(checkinId: String!): ToggleLikeResponse!
+  createCheckinComment(checkinId: String!, content: String!, parentId: String): CheckinComment!
+  deleteCheckinComment(commentId: String!): Boolean!
+  toggleLikeTrip(tripId: String!): ToggleLikeResponse!
+  createTripComment(tripId: String!, content: String!, parentId: String): TripComment!
+  deleteTripComment(commentId: String!): Boolean!
   checkin(data: CreateCheckinInput!): Checkin!
   createPlace(input: CreatePlaceInput!): Place!
   createComment(postId: String!, content: String!): Comment!

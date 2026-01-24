@@ -6,6 +6,7 @@ import { User } from "src/user/entities/user.entity";
 import { Place } from "src/place/place.entity";
 import { CONSTANTS } from "src/common/constants";
 import { FriendshipService } from "src/friendships/friendship.service";
+import { Mood } from "src/common/enums/mood.enum";
 
 // Error messages
 const ERROR_MESSAGES = {
@@ -26,14 +27,14 @@ export class CheckinService {
     private friendshipService: FriendshipService,
   ) { }
 
-  async createCheckin(user: User, place: Place, status?: string, mood?: string): Promise<Checkin> {
+  async createCheckin(user: User, place: Place, status?: string, mood?: string | Mood): Promise<Checkin> {
     this.logger.log(`Creating checkin for user ${user.id} at place ${place.id}`);
     
     const checkin = this.checkinRepo.create({
       user,
       place,
       status: status || CONSTANTS.CHECKIN_STATUS.CHECKED_IN,
-      mood,
+      mood: mood as Mood,
       checkedAt: new Date(),
     });
     

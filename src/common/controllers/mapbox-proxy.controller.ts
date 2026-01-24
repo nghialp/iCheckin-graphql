@@ -2,12 +2,10 @@ import {
 	Controller,
 	Get,
 	Query,
-	Res,
 	BadRequestException,
 	Logger,
 	StreamableFile,
 } from '@nestjs/common';
-import type { FastifyReply } from 'fastify';
 import axios, { AxiosError } from 'axios';
 import { ConfigService } from '@nestjs/config';
 
@@ -48,7 +46,6 @@ export class MapboxProxyController {
 		@Query('height') height: string = '200',
 		@Query('zoom') zoom: string = '14',
 		@Query('style') style: string = 'mapbox/streets-v12',
-		@Res({ passthrough: true }) res?: FastifyReply,
 	): Promise<StreamableFile> {
 		try {
 			// Validate required parameters
@@ -85,13 +82,11 @@ export class MapboxProxyController {
 			}
 
 			// Build Mapbox Static Images API URL
-			// Format: https://api.mapbox.com/styles/v1/{username}/{id}/static/{lon},{lat},{zoom},{bearing},{pitch}/{width}x{height}{@2x}
-			// const mapboxUrl = `https://api.mapbox.com/styles/v1/${style}/static${markerOverlay}/${lngNum},${latNum},${zoomNum},0,0/${widthNum}x${heightNum}@2x?access_token=${this.MAPBOX_ACCESS_TOKEN}`;
 			const mapboxUrl =
 				`https://api.mapbox.com/styles/v1/${style}/static/` +
 				`${lng},${lat},${zoomNum}/` +
 				`${width}x${height}` +
-				`?access_token=${this.MAPBOX_ACCESS_TOKEN}`; // Static Images API format [[Static maps](https://docs.mapbox.com/help/dive-deeper/static-maps/)]
+				`?access_token=${this.MAPBOX_ACCESS_TOKEN}`;
 
 			this.logger.debug(
 				`Fetching static map: lat=${latNum}, lng=${lngNum}, zoom=${zoomNum}, size=${widthNum}x${heightNum}`,
@@ -102,13 +97,6 @@ export class MapboxProxyController {
 				responseType: 'arraybuffer',
 				timeout: 10000,
 			});
-
-			// Set response headers via res if available (Fastify-compatible)
-			if (res) {
-				res.header('Content-Type', 'image/png');
-				res.header('Cache-Control', 'public, max-age=86400'); // Cache for 24 hours
-				res.header('Content-Length', response.data.length);
-			}
 
 			this.logger.debug(`Static map retrieved successfully`);
 			return new StreamableFile(response.data);
@@ -154,9 +142,8 @@ export class MapboxProxyController {
 	async getPreview(
 		@Query('lat') lat?: string,
 		@Query('lng') lng?: string,
-		@Res({ passthrough: true }) res?: FastifyReply,
 	): Promise<StreamableFile> {
 		// Delegate to /static with fixed dimensions
-		return this.getStaticImage(lat, lng, undefined, '200', '150', '13', 'mapbox/streets-v12', res);
+		return this.getStaticImage(lat, lng, undefined, '200', '150', '13', 'mapbox/streets-v12');
 	}
 }
