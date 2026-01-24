@@ -1,10 +1,12 @@
-import { Module } from '@nestjs/common';
+import { Module, Global } from '@nestjs/common';
 import { RateLimitMiddleware } from './middleware/rate-limit.middleware';
 import { MapboxPlacesService } from './services/mapbox-places.service';
 import { MapboxProxyController } from './controllers/mapbox-proxy.controller';
 import { CacheModule } from '@nestjs/cache-manager';
 import { ConfigModule } from '@nestjs/config';
+import { PubSubService, PUB_SUB } from './services/pub-sub.service';
 
+@Global()
 @Module({
 	imports: [
 		CacheModule.register({
@@ -17,10 +19,15 @@ import { ConfigModule } from '@nestjs/config';
 	providers: [
 		RateLimitMiddleware,
 		MapboxPlacesService,
+		{
+			provide: PUB_SUB,
+			useClass: PubSubService,
+		},
 	],
 	exports: [
 		RateLimitMiddleware,
 		MapboxPlacesService,
+		PUB_SUB,
 	],
 })
 export class CommonModule { }

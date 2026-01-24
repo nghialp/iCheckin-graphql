@@ -1,6 +1,7 @@
-import { Injectable, Logger, BadRequestException, NotFoundException } from "@nestjs/common";
+import { Injectable, Logger, BadRequestException, NotFoundException, Inject } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { DataSource, Repository } from "typeorm";
+import { PubSub } from "graphql-subscriptions";
 import { Friendship } from "./friendship.entity";
 import { FriendshipStatus } from "./friendship-status.enum";
 import { User } from "src/user/entities/user.entity";
@@ -10,6 +11,19 @@ import { PlaceFavorite } from "./place-favorite.entity";
 import { Post } from "src/post/post.entity";
 import { Checkin } from "src/checkin/checkin.entity";
 import { Place } from "src/place/place.entity";
+import { CheckinLike } from "src/checkin/checkin-like.entity";
+import { CheckinComment } from "src/checkin/checkin-comment.entity";
+import { TripLike } from "src/trip/trip-like.entity";
+import { TripComment } from "src/trip/trip-comment.entity";
+import { Trip } from "src/trip/trip.entity";
+import { PUB_SUB } from "src/common/services/pub-sub.service";
+
+// Event names for subscriptions
+export const CHECKIN_LIKED_EVENT = 'checkinLiked';
+export const CHECKIN_COMMENTED_EVENT = 'checkinCommented';
+export const TRIP_LIKED_EVENT = 'tripLiked';
+export const TRIP_COMMENTED_EVENT = 'tripCommented';
+export const POST_LIKED_EVENT = 'postLiked';
 
 // Error messages (English only)
 const ERROR_MESSAGES = {
@@ -44,6 +58,17 @@ export class FriendshipService {
     private checkinRepo: Repository<Checkin>,
     @InjectRepository(Place)
     private placeRepo: Repository<Place>,
+    @InjectRepository(CheckinLike)
+    private checkinLikeRepo: Repository<CheckinLike>,
+    @InjectRepository(CheckinComment)
+    private checkinCommentRepo: Repository<CheckinComment>,
+    @InjectRepository(TripLike)
+    private tripLikeRepo: Repository<TripLike>,
+    @InjectRepository(TripComment)
+    private tripCommentRepo: Repository<TripComment>,
+    @InjectRepository(Trip)
+    private tripRepo: Repository<Trip>,
+    @Inject(PUB_SUB) private pubSub: PubSub,
     private dataSource: DataSource,
   ) {}
 
@@ -361,6 +386,13 @@ export class FriendshipService {
 
     await this.likeRepo.save(like);
     this.logger.log(`User ${userId} liked post ${postId}`);
+
+    // Publish like event for subscriptions
+    const likeCount = await this.likeRepo.count({ where: { post: { id: postId } } });
+    await this.pubSub.publish(POST_LIKED_EVENT, {
+      postLiked: { postId, like, likeCount },
+    });
+
     return like;
   }
 
@@ -536,5 +568,242 @@ export class FriendshipService {
     return this.placeFavoriteRepo.count({
       where: { place: { id: placeId } },
     });
+  }
+
+  // ==================== Checkin Like System ====================
+
+  async toggleLikeCheckin(userId: string, checkinId: string): Promise<{ liked: boolean; likeCount: number }> {
+    const user = await this.userRepo.findOne({ where: { id: userId } });
+    const checkin = await this.checkinRepo.findOne({ where: { id: checkinId } });
+
+    if (!user || !checkin) {
+      throw new NotFoundException('User or Checkin not found');
+    }
+
+    const existing = await this.checkinLikeRepo.findOne({
+      where: { user: { id: userId }, checkin: { id: checkinId } },
+    });
+
+    if (existing) {
+      // Already liked - remove the like
+      await this.checkinLikeRepo.remove(existing);
+      this.logger.log(`User ${userId} unliked checkin ${checkinId}`);
+      const likeCount = await this.checkinLikeRepo.count({ where: { checkin: { id: checkinId } } });
+      
+      // Publish event
+      await this.pubSub.publish(CHECKIN_LIKED_EVENT, {
+        checkinLiked: { checkinId, like: existing, likeCount },
+      });
+      
+      return { liked: false, likeCount };
+    } else {
+
+      // Not liked yet - add the like
+      const like = this.checkinLikeRepo.create({ user, checkin });
+      await this.checkinLikeRepo.save(like);
+      this.logger.log(`User ${userId} liked checkin ${checkinId}`);
+      const likeCount = await this.checkinLikeRepo.count({ where: { checkin: { id: checkinId } } });
+      
+      // Publish event
+      await this.pubSub.publish(CHECKIN_LIKED_EVENT, {
+        checkinLiked: { checkinId, like, likeCount },
+      });
+      
+      return { liked: true, likeCount };
+    }
+  }
+
+  async getCheckinLikes(checkinId: string): Promise<CheckinLike[]> {
+    return this.checkinLikeRepo.find({
+      where: { checkin: { id: checkinId } },
+      relations: ['user'],
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  async hasUserLikedCheckin(userId: string, checkinId: string): Promise<boolean> {
+    const like = await this.checkinLikeRepo.findOne({
+      where: { user: { id: userId }, checkin: { id: checkinId } },
+    });
+    return !!like;
+  }
+
+  async getCheckinLikeCount(checkinId: string): Promise<number> {
+    return this.checkinLikeRepo.count({
+      where: { checkin: { id: checkinId } },
+    });
+  }
+
+  // ==================== Checkin Comment System ====================
+
+  async createCheckinComment(userId: string, checkinId: string, content: string, parentId?: string): Promise<CheckinComment> {
+    const user = await this.userRepo.findOne({ where: { id: userId } });
+    const checkin = await this.checkinRepo.findOne({ where: { id: checkinId } });
+
+    if (!user || !checkin) {
+      throw new NotFoundException('User or Checkin not found');
+    }
+
+    const comment = this.checkinCommentRepo.create({
+      user,
+      checkin,
+      content,
+      parent_id: parentId,
+    });
+
+    await this.checkinCommentRepo.save(comment);
+    this.logger.log(`User ${userId} commented on checkin ${checkinId}`);
+
+    // Publish comment event for subscriptions
+    await this.pubSub.publish(CHECKIN_COMMENTED_EVENT, {
+      checkinCommented: { checkinId, comment },
+    });
+
+    return comment;
+  }
+
+  async getCheckinComments(checkinId: string): Promise<CheckinComment[]> {
+    return this.checkinCommentRepo.find({
+      where: { checkin: { id: checkinId } },
+      relations: ['user'],
+      order: { createdAt: 'ASC' },
+    });
+  }
+
+  async deleteCheckinComment(commentId: string, userId: string): Promise<boolean> {
+    const comment = await this.checkinCommentRepo.findOne({
+      where: { id: commentId },
+      relations: ['user'],
+    });
+
+    if (!comment) {
+      throw new NotFoundException('Comment not found');
+    }
+
+    if (comment.user.id !== userId) {
+      throw new BadRequestException('You can only delete your own comments');
+    }
+
+    await this.checkinCommentRepo.remove(comment);
+    this.logger.log(`User ${userId} deleted checkin comment ${commentId}`);
+    return true;
+  }
+
+  // ==================== Trip Like System ====================
+
+  async toggleLikeTrip(userId: string, tripId: string): Promise<{ liked: boolean; likeCount: number }> {
+    const user = await this.userRepo.findOne({ where: { id: userId } });
+    const trip = await this.tripRepo.findOne({ where: { id: tripId } });
+
+    if (!user || !trip) {
+      throw new NotFoundException('User or Trip not found');
+    }
+
+    const existing = await this.tripLikeRepo.findOne({
+      where: { user: { id: userId }, trip: { id: tripId } },
+    });
+
+    if (existing) {
+      // Already liked - remove the like
+      await this.tripLikeRepo.remove(existing);
+      this.logger.log(`User ${userId} unliked trip ${tripId}`);
+      const likeCount = await this.tripLikeRepo.count({ where: { trip: { id: tripId } } });
+
+      // Publish event for subscriptions
+      await this.pubSub.publish(TRIP_LIKED_EVENT, {
+        tripLiked: { tripId, like: existing, likeCount },
+      });
+
+      return { liked: false, likeCount };
+    } else {
+      // Not liked yet - add the like
+      const like = this.tripLikeRepo.create({ user, trip });
+      await this.tripLikeRepo.save(like);
+      this.logger.log(`User ${userId} liked trip ${tripId}`);
+      const likeCount = await this.tripLikeRepo.count({ where: { trip: { id: tripId } } });
+
+      // Publish event for subscriptions
+      await this.pubSub.publish(TRIP_LIKED_EVENT, {
+        tripLiked: { tripId, like, likeCount },
+      });
+
+      return { liked: true, likeCount };
+    }
+  }
+
+  async getTripLikes(tripId: string): Promise<TripLike[]> {
+    return this.tripLikeRepo.find({
+      where: { trip: { id: tripId } },
+      relations: ['user'],
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  async hasUserLikedTrip(userId: string, tripId: string): Promise<boolean> {
+    const like = await this.tripLikeRepo.findOne({
+      where: { user: { id: userId }, trip: { id: tripId } },
+    });
+    return !!like;
+  }
+
+  async getTripLikeCount(tripId: string): Promise<number> {
+    return this.tripLikeRepo.count({
+      where: { trip: { id: tripId } },
+    });
+  }
+
+  // ==================== Trip Comment System ====================
+
+  async createTripComment(userId: string, tripId: string, content: string, parentId?: string): Promise<TripComment> {
+    const user = await this.userRepo.findOne({ where: { id: userId } });
+    const trip = await this.tripRepo.findOne({ where: { id: tripId } });
+
+    if (!user || !trip) {
+      throw new NotFoundException('User or Trip not found');
+    }
+
+    const comment = this.tripCommentRepo.create({
+      user,
+      trip,
+      content,
+      parent_id: parentId,
+    });
+
+    await this.tripCommentRepo.save(comment);
+    this.logger.log(`User ${userId} commented on trip ${tripId}`);
+
+    // Publish comment event for subscriptions
+    await this.pubSub.publish(TRIP_COMMENTED_EVENT, {
+      tripCommented: { tripId, comment },
+    });
+
+    return comment;
+  }
+
+  async getTripComments(tripId: string): Promise<TripComment[]> {
+    return this.tripCommentRepo.find({
+      where: { trip: { id: tripId } },
+      relations: ['user'],
+      order: { createdAt: 'ASC' },
+    });
+  }
+
+  async deleteTripComment(commentId: string, userId: string): Promise<boolean> {
+    const comment = await this.tripCommentRepo.findOne({
+      where: { id: commentId },
+      relations: ['user'],
+    });
+
+    if (!comment) {
+      throw new NotFoundException('Comment not found');
+    }
+
+    if (comment.user.id !== userId) {
+      throw new BadRequestException('You can only delete your own comments');
+    }
+
+    await this.tripCommentRepo.remove(comment);
+    this.logger.log(`User ${userId} deleted trip comment ${commentId}`);
+    return true;
   }
 }

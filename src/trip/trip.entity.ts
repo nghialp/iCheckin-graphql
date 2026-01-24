@@ -5,6 +5,8 @@ import { Post } from 'src/post/post.entity';
 import { Place } from 'src/place/place.entity';
 import { TripCollaborator } from './trip-collaborator.entity';
 import { TripItinerary } from './trip-itinerary.entity';
+import { TripLike } from './trip-like.entity';
+import { TripComment } from './trip-comment.entity';
 
 @ObjectType()
 @Entity()
@@ -62,6 +64,14 @@ export class Trip {
   @OneToMany(() => TripItinerary, itinerary => itinerary.trip)
   @Field(() => [TripItinerary], { nullable: true })
   itineraries?: TripItinerary[];
+
+  @OneToMany(() => TripLike, like => like.trip)
+  @Field(() => [TripLike], { nullable: true })
+  likes?: TripLike[];
+
+  @OneToMany(() => TripComment, comment => comment.trip)
+  @Field(() => [TripComment], { nullable: true })
+  comments?: TripComment[];
 
   @Field(() => [String], { nullable: true })
   @Column('simple-array', { nullable: true })
